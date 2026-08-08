@@ -13,7 +13,10 @@
     "BlockNeighborChangedInvoker",
     "BlockTickInvoker",
     "LavaLoggedDefaultStateMixin",
-    "LavaLoggingReactionMixin"
+    "LavaLoggingReactionMixin",
+    "ItemFrameCompositeSnapMixin",
+    "CompositeWallAttachmentMixin",
+    "WallHangingSignCompositeSupportMixin"
   ],
   "injectors": {
     "defaultRequire": 1

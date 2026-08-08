@@ -92,7 +92,7 @@ public final class CompositePlacementHandler {
                 return InteractionResult.PASS;
             }
             var coverTarget = footCoverTarget(level, effectiveHit, originalPos, original, held.getItem(), player);
-            if (player.isSecondaryUseActive() && coverTarget != null) {
+            if (coverTarget != null) {
                 if (level.isClientSide()) return InteractionResult.SUCCESS;
                 return addFootCover(player, level, hand, coverTarget.pos(), coverTarget.state(), held.getItem());
             }

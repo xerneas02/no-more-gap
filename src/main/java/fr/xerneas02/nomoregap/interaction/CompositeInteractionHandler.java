@@ -16,6 +16,11 @@ public final class CompositeInteractionHandler {
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             var compositePos = hit.getBlockPos();
             var composite = level.getBlockEntity(compositePos) instanceof CompositeBlockEntity direct ? direct : null;
+            if (composite == null && level.getBlockEntity(compositePos) instanceof fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity proxy
+                    && level.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity anchor) {
+                compositePos = proxy.anchor();
+                composite = anchor;
+            }
             if (composite == null && level.getBlockState(compositePos).getBlock() instanceof DoorBlock
                     && level.getBlockState(compositePos).getValue(DoorBlock.HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER
                     && level.getBlockEntity(compositePos.below()) instanceof CompositeBlockEntity below) {
@@ -30,10 +35,12 @@ public final class CompositeInteractionHandler {
             var state = part.state();
             if (!(state.getBlock() instanceof DoorBlock) && !(state.getBlock() instanceof FenceGateBlock)
                     && !(state.getBlock() instanceof TrapDoorBlock)) return InteractionResult.PASS;
+            if (state.getBlock() instanceof DoorBlock door && !door.type().canOpenByHand()) return InteractionResult.PASS;
             if (level.isClientSide()) return InteractionResult.SUCCESS;
             var open = state.getValue(BlockStateProperties.OPEN);
             var updated = state.setValue(BlockStateProperties.OPEN, !open);
             composite.replacePart(part.id(), updated);
+            if (state.getBlock() instanceof DoorBlock) syncCompositeDoor(composite, state, !open);
             var sound = state.getBlock() instanceof DoorBlock door
                     ? (!open ? door.type().doorOpen() : door.type().doorClose())
                     : state.getBlock() instanceof TrapDoorBlock
@@ -45,6 +52,16 @@ public final class CompositeInteractionHandler {
             }
             return InteractionResult.SUCCESS_SERVER;
         });
+    }
+
+    private static void syncCompositeDoor(CompositeBlockEntity composite, net.minecraft.world.level.block.state.BlockState state,
+                                          boolean open) {
+        for (var other : java.util.List.copyOf(composite.parts().view())) {
+            if (other.state().getBlock() == state.getBlock() && other.state().hasProperty(DoorBlock.HALF)) {
+                composite.replacePart(other.id(), other.state().setValue(DoorBlock.OPEN, open)
+                        .setValue(DoorBlock.POWERED, state.getValue(DoorBlock.POWERED)));
+            }
+        }
     }
 
     private static void updateDoorTop(net.minecraft.world.level.Level level, BlockPos topPos,

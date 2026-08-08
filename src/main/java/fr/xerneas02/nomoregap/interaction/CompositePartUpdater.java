@@ -20,7 +20,7 @@ public final class CompositePartUpdater {
     private CompositePartUpdater() {}
 
     public static void refreshAround(Level level, BlockPos pos) {
-        refresh(level, pos);
+        for (int y = -2; y <= 2; y++) refresh(level, pos.offset(0, y, 0));
         for (Direction direction : Direction.values()) refresh(level, pos.relative(direction));
     }
 
@@ -42,11 +42,23 @@ public final class CompositePartUpdater {
     private static BlockState refreshRedstone(Level level, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof DoorBlock || state.getBlock() instanceof TrapDoorBlock
                 || state.getBlock() instanceof FenceGateBlock)) return state;
-        boolean powered = level.hasNeighborSignal(pos);
+        if (state.getBlock() instanceof DoorBlock
+                && state.getValue(DoorBlock.HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER) return state;
+        boolean powered = state.getBlock() instanceof DoorBlock
+                ? level.hasNeighborSignal(pos) || level.hasNeighborSignal(pos.above()) || level.hasNeighborSignal(pos.above(2))
+                : level.hasNeighborSignal(pos);
         boolean wasPowered = state.hasProperty(BlockStateProperties.POWERED)
                 && state.getValue(BlockStateProperties.POWERED);
         if (wasPowered != powered && state.hasProperty(BlockStateProperties.OPEN)) {
             state = state.setValue(BlockStateProperties.OPEN, powered);
+            if (!level.isClientSide()) {
+                var sound = state.getBlock() instanceof DoorBlock door
+                        ? (powered ? door.type().doorOpen() : door.type().doorClose())
+                        : state.getBlock() instanceof TrapDoorBlock
+                        ? (powered ? net.minecraft.sounds.SoundEvents.WOODEN_TRAPDOOR_OPEN : net.minecraft.sounds.SoundEvents.WOODEN_TRAPDOOR_CLOSE)
+                        : (powered ? net.minecraft.sounds.SoundEvents.FENCE_GATE_OPEN : net.minecraft.sounds.SoundEvents.FENCE_GATE_CLOSE);
+                level.playSound(null, pos, sound, net.minecraft.sounds.SoundSource.BLOCKS, 1, 1);
+            }
         }
         if (state.hasProperty(BlockStateProperties.POWERED)) state = state.setValue(BlockStateProperties.POWERED, powered);
         return state;
@@ -55,6 +67,15 @@ public final class CompositePartUpdater {
     private static void syncDoorTop(Level level, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof DoorBlock)
                 || state.getValue(DoorBlock.HALF) != net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) return;
+        if (level.getBlockEntity(pos) instanceof CompositeBlockEntity composite) {
+            for (var part : java.util.List.copyOf(composite.parts().view())) {
+                if (part.state().getBlock() == state.getBlock()
+                        && part.state().getValue(DoorBlock.HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER) {
+                    composite.replacePart(part.id(), part.state().setValue(DoorBlock.OPEN, state.getValue(DoorBlock.OPEN))
+                            .setValue(DoorBlock.POWERED, state.getValue(DoorBlock.POWERED)));
+                }
+            }
+        }
         var topPos = pos.above();
         var top = level.getBlockState(topPos);
         if (top.getBlock() == state.getBlock() && top.hasProperty(DoorBlock.OPEN)) {

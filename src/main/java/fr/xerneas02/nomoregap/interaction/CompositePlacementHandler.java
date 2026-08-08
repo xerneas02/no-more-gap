@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.sounds.SoundSource;
@@ -88,8 +89,13 @@ public final class CompositePlacementHandler {
                 if (level.isClientSide()) return InteractionResult.SUCCESS;
                 return addFootCover(player, level, hand, coverTarget.pos(), coverTarget.state(), held.getItem());
             }
-            if (!player.isSecondaryUseActive() || hit.getDirection() != Direction.UP || !matches(original, held.getItem())
-                    || level.getBlockEntity(hit.getBlockPos()) != null) {
+            var existingComposite = level.getBlockEntity(hit.getBlockPos()) instanceof CompositeBlockEntity existing ? existing : null;
+            boolean footComposite = existingComposite != null && existingComposite.parts().view().stream().anyMatch(part ->
+                    part.state().getBlock() instanceof SnowLayerBlock || part.state().getBlock() instanceof CarpetBlock
+                            || part.state().getBlock() instanceof MossyCarpetBlock);
+            if ((!player.isSecondaryUseActive() && !footComposite) || hit.getDirection() != Direction.UP
+                    || (!footComposite && !matches(original, held.getItem()))
+                    || (existingComposite != null && !footComposite)) {
                 return InteractionResult.PASS;
             }
             var block = ((BlockItem) held.getItem()).getBlock();
@@ -118,21 +124,26 @@ public final class CompositePlacementHandler {
             }
             if (level.isClientSide()) return InteractionResult.SUCCESS;
 
-            if (!level.setBlock(hit.getBlockPos(), ModBlocks.COMPOSITE.defaultBlockState(), Block.UPDATE_ALL)) {
-                return InteractionResult.FAIL;
+            CompositeBlockEntity composite = existingComposite;
+            if (composite == null) {
+                if (!level.setBlock(hit.getBlockPos(), ModBlocks.COMPOSITE.defaultBlockState(), Block.UPDATE_ALL)) {
+                    return InteractionResult.FAIL;
+                }
+                if (!(level.getBlockEntity(hit.getBlockPos()) instanceof CompositeBlockEntity created)) {
+                    level.setBlock(hit.getBlockPos(), original, Block.UPDATE_ALL);
+                    return InteractionResult.FAIL;
+                }
+                composite = created;
+                composite.addPart(original, LocalTransform.IDENTITY, 0);
             }
-            if (!(level.getBlockEntity(hit.getBlockPos()) instanceof CompositeBlockEntity composite)) {
-                level.setBlock(hit.getBlockPos(), original, Block.UPDATE_ALL);
-                return InteractionResult.FAIL;
-            }
-            composite.addPart(original, LocalTransform.IDENTITY, 0);
             composite.addPart(placed, transform, 0);
             if (placed.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                     && placed.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
                     == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
                 var top = placed.setValue(net.minecraft.world.level.block.DoorBlock.HALF,
                         net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER);
-                level.setBlock(hit.getBlockPos().above(), top, Block.UPDATE_ALL);
+                composite.addPart(top, new LocalTransform(transform.x(), transform.y().add(FixedPoint.FULL_BLOCK),
+                        transform.z(), transform.quarterTurns()), 0);
             }
             CompositePartUpdater.refreshAround(level, hit.getBlockPos());
             if (!player.isCreative()) held.shrink(1);
@@ -154,7 +165,8 @@ public final class CompositePlacementHandler {
                                                net.minecraft.core.BlockPos hitPos, BlockState hitState, Item item,
                                                net.minecraft.world.entity.player.Player player) {
         if (!(item instanceof BlockItem blockItem)
-                || !(blockItem.getBlock() instanceof SnowLayerBlock || blockItem.getBlock() instanceof CarpetBlock)) return null;
+                || !(blockItem.getBlock() instanceof SnowLayerBlock || blockItem.getBlock() instanceof CarpetBlock
+                || blockItem.getBlock() instanceof MossyCarpetBlock)) return null;
         if (hit.getDirection() == Direction.UP) {
             var above = hitPos.above();
             var aboveState = level.getBlockState(above);
@@ -166,7 +178,8 @@ public final class CompositePlacementHandler {
 
     private static boolean canFootCover(BlockState state, net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos,
                                         net.minecraft.world.entity.player.Player player) {
-        if (state.getBlock() instanceof SnowLayerBlock || state.getBlock() instanceof CarpetBlock || state.isAir() || !state.getFluidState().isEmpty()
+        if (state.getBlock() instanceof SnowLayerBlock || state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof MossyCarpetBlock
+                || state.isAir() || !state.getFluidState().isEmpty()
                 || level.getBlockEntity(pos) != null) return false;
         return !Block.isShapeFullBlock(state.getCollisionShape(level, pos, CollisionContext.of(player)));
     }
@@ -189,6 +202,7 @@ public final class CompositePlacementHandler {
         }
         composite.addPart(original, LocalTransform.IDENTITY, 0);
         composite.addPart(((BlockItem) item).getBlock().defaultBlockState(), LocalTransform.IDENTITY, 0);
+        CompositePartUpdater.refreshAround(level, pos);
         if (doorTop != null) level.setBlock(pos.above(), doorTop, Block.UPDATE_CLIENTS);
         if (!player.isCreative()) player.getItemInHand(hand).shrink(1);
         var sound = ((BlockItem) item).getBlock().defaultBlockState().getSoundType();

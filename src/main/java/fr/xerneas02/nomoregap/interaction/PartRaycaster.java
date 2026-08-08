@@ -15,6 +15,7 @@ public final class PartRaycaster {
         var start = player.getEyePosition();
         var end = start.add(player.getViewVector(1).scale(reach));
         PartHitResult closest = null;
+        boolean closestIsCover = false;
         for (var part : composite.parts().view()) {
             var shape = ShapeTransformer.transform(
                     part.state().getShape(world, composite.getBlockPos(), CollisionContext.of(player)), part.transform());
@@ -22,8 +23,13 @@ public final class PartRaycaster {
                 var hit = box.move(composite.getBlockPos()).clip(start, end);
                 if (hit.isEmpty()) continue;
                 double distance = start.distanceToSqr(hit.get());
-                if (closest == null || distance < closest.distanceSquared()) {
+                boolean cover = part.state().getBlock() instanceof net.minecraft.world.level.block.SnowLayerBlock
+                        || part.state().getBlock() instanceof net.minecraft.world.level.block.CarpetBlock
+                        || part.state().getBlock() instanceof net.minecraft.world.level.block.MossyCarpetBlock;
+                if (closest == null || distance < closest.distanceSquared() - 1.0e-8
+                        || Math.abs(distance - closest.distanceSquared()) <= 1.0e-8 && cover && !closestIsCover) {
                     closest = new PartHitResult(part.id(), hit.get(), distance);
+                    closestIsCover = cover;
                 }
             }
         }

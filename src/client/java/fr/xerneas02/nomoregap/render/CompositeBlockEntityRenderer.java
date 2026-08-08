@@ -35,7 +35,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         for (int i = 0; i < state.count; i++) state.models[i].clear();
         state.count = 0;
         state.breakingIndex = -1;
-        int breakingPartId = crumbling == null || net.minecraft.client.Minecraft.getInstance().player == null ? -1
+        int breakingPartId = state.breakProgress == null || net.minecraft.client.Minecraft.getInstance().player == null ? -1
                 : fr.xerneas02.nomoregap.interaction.PartRaycaster.raycast(entity, entity.getLevel(),
                         net.minecraft.client.Minecraft.getInstance().player, 6).map(hit -> hit.partId()).orElse(-1);
         for (var part : entity.parts().view()) {
@@ -70,11 +70,6 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         for (int i = 0; i < state.count; i++) {
             pose.pushPose();
             pose.translate(state.x[i], state.y[i], state.z[i]);
-            if (state.snow[i]) {
-                pose.translate(0.5, 0, 0.5);
-                pose.scale(0.996f, 1, 0.996f);
-                pose.translate(-0.5, 0, -0.5);
-            }
             if (state.formedRock[i]) {
                 pose.translate(0.5, 0.5, 0.5);
                 pose.scale(0.996f, 0.996f, 0.996f);

@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "lit=false": { "model": "no_more_gap:block/composite" },
+    "lit=true": { "model": "no_more_gap:block/composite" }
+  }
+}

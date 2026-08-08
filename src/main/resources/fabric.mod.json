@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "no_more_gap",
+  "version": "${version}",
+  "name": "No More Gap",
+  "description": "A generic block composition system for placing compatible blocks in the same Minecraft cell.",
+  "authors": ["xerneas02"],
+  "license": "All Rights Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["fr.xerneas02.nomoregap.NoMoreGap"],
+    "client": ["fr.xerneas02.nomoregap.NoMoreGapClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.1.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

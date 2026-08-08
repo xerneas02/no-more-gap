@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "No More Gap: Build",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["clean", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "No More Gap: Tests",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon"
+        }
+      }
+    },
+    {
+      "label": "No More Gap: Run Client",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["runClient"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon"
+        }
+      }
+    },
+    {
+      "label": "No More Gap: Run Server",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["runServer"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon"
+        }
+      }
+    }
+  ]
+}

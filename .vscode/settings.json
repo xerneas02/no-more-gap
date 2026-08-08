@@ -1,0 +1,34 @@
+{
+  "java.jdt.ls.java.home": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon",
+  "java.import.gradle.java.home": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-25",
+      "path": "${env:LOCALAPPDATA}\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\java-runtime-epsilon\\windows-x64\\java-runtime-epsilon",
+      "default": true
+    }
+  ],
+  "VsCodeTaskButtons.showCounter": false,
+  "VsCodeTaskButtons.tasks": [
+    {
+      "label": "$(play) Client",
+      "task": "No More Gap: Run Client",
+      "tooltip": "Lancer Minecraft avec No More Gap"
+    },
+    {
+      "label": "$(server-process) Serveur",
+      "task": "No More Gap: Run Server",
+      "tooltip": "Lancer le serveur Fabric"
+    },
+    {
+      "label": "$(beaker) Tests",
+      "task": "No More Gap: Tests",
+      "tooltip": "Exécuter les tests"
+    },
+    {
+      "label": "$(tools) Build",
+      "task": "No More Gap: Build",
+      "tooltip": "Construire le mod"
+    }
+  ]
+}

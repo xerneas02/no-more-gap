@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.world.phys.Vec3;
 import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
+import fr.xerneas02.nomoregap.lava.LavaLoggingReactions;
 
 /** Prototype renderer. Static parts should eventually be cached in chunk geometry. */
 public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<CompositeBlockEntity, CompositeBlockEntityRenderer.State> {
@@ -47,6 +48,12 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
             state.x[i] = part.transform().xDouble();
             state.y[i] = part.transform().yDouble();
             state.snow[i] = part.state().getBlock() instanceof net.minecraft.world.level.block.SnowLayerBlock;
+            state.formedRock[i] = part.flags() == LavaLoggingReactions.FORMED_ROCK
+                    && entity.parts().view().stream().anyMatch(other -> other.id() != part.id()
+                    && fr.xerneas02.nomoregap.geometry.OverlapTester.overlaps(
+                    other.state().getShape(entity.getLevel(), entity.getBlockPos(), net.minecraft.world.phys.shapes.CollisionContext.empty()),
+                    part.state().getShape(entity.getLevel(), entity.getBlockPos(), net.minecraft.world.phys.shapes.CollisionContext.empty()),
+                    part.transform()));
             state.z[i] = part.transform().zDouble();
             state.rotation[i] = part.transform().degrees();
             var samplePos = entity.getBlockPos().offset(
@@ -68,6 +75,11 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                 pose.scale(0.996f, 1, 0.996f);
                 pose.translate(-0.5, 0, -0.5);
             }
+            if (state.formedRock[i]) {
+                pose.translate(0.5, 0.5, 0.5);
+                pose.scale(0.996f, 0.996f, 0.996f);
+                pose.translate(-0.5, -0.5, -0.5);
+            }
             pose.rotateAround(Axis.YP.rotationDegrees(state.rotation[i]), 0.5f, 0, 0.5f);
             state.models[i].submit(pose, collector, state.lights[i], OverlayTexture.NO_OVERLAY, 0);
             if (i == state.breakingIndex && state.breakProgress != null) {
@@ -87,6 +99,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         private final int[] rotation = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] lights = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final boolean[] snow = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final boolean[] formedRock = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private int count;
         private int breakingIndex = -1;
 

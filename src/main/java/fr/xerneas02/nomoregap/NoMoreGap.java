@@ -6,6 +6,7 @@ import fr.xerneas02.nomoregap.interaction.CreativeCompositeBreakingHandler;
 import fr.xerneas02.nomoregap.interaction.CompositeInteractionHandler;
 import fr.xerneas02.nomoregap.network.NoMoreGapNetworking;
 import fr.xerneas02.nomoregap.registry.ModRegistries;
+import fr.xerneas02.nomoregap.lava.LavaLoggingRules;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ public final class NoMoreGap implements ModInitializer {
     public static Identifier id(String path) { return Identifier.fromNamespaceAndPath(MOD_ID, path); }
 
     @Override public void onInitialize() {
+        LavaLoggingRules.initialize();
         ModRegistries.initialize();
         NoMoreGapNetworking.initialize();
         NoMoreGapDebugCommand.initialize();

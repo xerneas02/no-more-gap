@@ -78,14 +78,24 @@ public final class CompositeBlockEntity extends BlockEntity {
         geometry.invalidate();
         setChanged();
         if (level != null) {
-            boolean lit = parts.view().stream().anyMatch(part -> part.state().getLightEmission() > 0);
+            boolean lava = parts.view().stream().anyMatch(part -> part.state().hasProperty(fr.xerneas02.nomoregap.lava.LavaLogging.LAVA_LOGGED)
+                    && part.state().getValue(fr.xerneas02.nomoregap.lava.LavaLogging.LAVA_LOGGED));
+            boolean water = !lava && parts.view().stream().anyMatch(part -> part.state().hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
+                    && part.state().getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED));
+            boolean lit = lava || parts.view().stream().anyMatch(part -> part.state().getLightEmission() > 0);
             BlockState current = getBlockState();
-            if (current.getValue(fr.xerneas02.nomoregap.block.CompositeBlock.LIT) != lit) {
-                level.setBlock(worldPosition, current.setValue(fr.xerneas02.nomoregap.block.CompositeBlock.LIT, lit), Block.UPDATE_ALL);
+            var updated = current.setValue(fr.xerneas02.nomoregap.block.CompositeBlock.LIT, lit)
+                    .setValue(fr.xerneas02.nomoregap.block.CompositeBlock.WATER, water)
+                    .setValue(fr.xerneas02.nomoregap.block.CompositeBlock.LAVA, lava);
+            if (current != updated) {
+                level.setBlock(worldPosition, updated, Block.UPDATE_ALL);
             } else {
                 level.sendBlockUpdated(worldPosition, current, current, Block.UPDATE_CLIENTS);
             }
             if (!level.isClientSide()) refreshProxies();
+            if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                fr.xerneas02.nomoregap.lava.LavaLoggingReactions.tryReact(serverLevel, worldPosition);
+            }
         }
     }
 
@@ -138,6 +148,7 @@ public final class CompositeBlockEntity extends BlockEntity {
         }
         geometryDirty = true;
         geometry.invalidate();
+        if (level != null) changed();
     }
 
     @Override public Packet<ClientGamePacketListener> getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }

@@ -14,6 +14,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -29,10 +31,12 @@ import fr.xerneas02.nomoregap.part.PartInstance;
 public final class CompositeBlock extends BaseEntityBlock {
     public static final MapCodec<CompositeBlock> CODEC = simpleCodec(CompositeBlock::new);
     public static final BooleanProperty LIT = BooleanProperty.create("lit");
+    public static final BooleanProperty WATER = BooleanProperty.create("water");
+    public static final BooleanProperty LAVA = BooleanProperty.create("lava");
 
     public CompositeBlock(BlockBehaviour.Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(LIT, false));
+        registerDefaultState(stateDefinition.any().setValue(LIT, false).setValue(WATER, false).setValue(LAVA, false));
     }
     @Override protected MapCodec<? extends BaseEntityBlock> codec() { return CODEC; }
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new CompositeBlockEntity(pos, state); }
@@ -54,7 +58,13 @@ public final class CompositeBlock extends BaseEntityBlock {
     @Override protected VoxelShape getOcclusionShape(BlockState state) { return Shapes.empty(); }
 
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
-        builder.add(LIT);
+        builder.add(LIT, WATER, LAVA);
+    }
+
+    @Override protected FluidState getFluidState(BlockState state) {
+        if (state.getValue(LAVA)) return Fluids.LAVA.getSource(false);
+        if (state.getValue(WATER)) return Fluids.WATER.getSource(false);
+        return super.getFluidState(state);
     }
 
     @Override protected ItemStack getCloneItemStack(LevelReader world, BlockPos pos, BlockState state, boolean includeData) {

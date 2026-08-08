@@ -36,6 +36,31 @@ public final class CompositePlacementHandler {
             var held = player.getItemInHand(hand);
             var originalPos = hit.getBlockPos();
             var original = level.getBlockState(originalPos);
+            if (held.getItem() instanceof BlockItem blockItem && original.getFluidState().is( net.minecraft.world.level.material.Fluids.LAVA)) {
+                var placed = blockItem.getBlock().getStateForPlacement(new BlockPlaceContext(player, hand, held, hit));
+                if (placed != null && canLavaLog(placed)) {
+                    if (level.isClientSide()) return InteractionResult.SUCCESS;
+                    level.setBlock(originalPos, placed.setValue(LavaLogging.LAVA_LOGGED, true), Block.UPDATE_ALL);
+                    if (!player.isCreative()) held.shrink(1);
+                    var sound = placed.getSoundType();
+                    level.playSound(null, originalPos, sound.getPlaceSound(), SoundSource.BLOCKS,
+                            (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+                    return InteractionResult.SUCCESS_SERVER;
+                }
+            }
+            var compositeResult = useFluidBucketOnCompositePart(player, level, hand, originalPos, held);
+            if (compositeResult != null) return compositeResult;
+            if (held.is(Items.WATER_BUCKET) && isLavaLogged(original)) {
+                if (level.isClientSide()) return InteractionResult.SUCCESS;
+                level.setBlock(originalPos, original.setValue(LavaLogging.LAVA_LOGGED, false)
+                        .setValue(BlockStateProperties.WATERLOGGED, true), Block.UPDATE_ALL);
+                level.scheduleTick(originalPos, net.minecraft.world.level.material.Fluids.WATER,
+                        net.minecraft.world.level.material.Fluids.WATER.getTickDelay(level));
+                if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.BUCKET));
+                level.playSound(null, originalPos, net.minecraft.sounds.SoundEvents.BUCKET_EMPTY,
+                        SoundSource.BLOCKS, 1, 1);
+                return InteractionResult.SUCCESS_SERVER;
+            }
             if (held.is(Items.BUCKET) && isLavaLogged(original)) {
                 if (level.isClientSide()) return InteractionResult.SUCCESS;
                 level.setBlock(originalPos, original.setValue(LavaLogging.LAVA_LOGGED, false), Block.UPDATE_ALL);
@@ -102,6 +127,14 @@ public final class CompositePlacementHandler {
             }
             composite.addPart(original, LocalTransform.IDENTITY, 0);
             composite.addPart(placed, transform, 0);
+            if (placed.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    && placed.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+                var top = placed.setValue(net.minecraft.world.level.block.DoorBlock.HALF,
+                        net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER);
+                level.setBlock(hit.getBlockPos().above(), top, Block.UPDATE_ALL);
+            }
+            CompositePartUpdater.refreshAround(level, hit.getBlockPos());
             if (!player.isCreative()) held.shrink(1);
             var sound = placed.getSoundType();
             level.playSound(null, hit.getBlockPos(), sound.getPlaceSound(), SoundSource.BLOCKS,
@@ -173,6 +206,57 @@ public final class CompositePlacementHandler {
 
     private static boolean isLavaLogged(BlockState state) {
         return state.hasProperty(LavaLogging.LAVA_LOGGED) && state.getValue(LavaLogging.LAVA_LOGGED);
+    }
+
+    /** Handles a bucket against the exact water/lava-loggable part hit inside a composite. */
+    private static InteractionResult useFluidBucketOnCompositePart(net.minecraft.world.entity.player.Player player,
+                                                                    net.minecraft.world.level.Level level,
+                                                                    net.minecraft.world.InteractionHand hand,
+                                                                    net.minecraft.core.BlockPos pos,
+                                                                    ItemStack held) {
+        if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)
+                || !(held.is(Items.WATER_BUCKET) || held.is(Items.LAVA_BUCKET) || held.is(Items.BUCKET))) return null;
+        var hit = PartRaycaster.raycast(composite, level, player, 6).flatMap(result -> composite.parts().find(result.partId()));
+        if (hit.isEmpty()) return null;
+        var part = hit.get();
+        var state = part.state();
+        if (!state.hasProperty(BlockStateProperties.WATERLOGGED) || !state.hasProperty(LavaLogging.LAVA_LOGGED)) return null;
+
+        if (held.is(Items.WATER_BUCKET) && !state.getValue(BlockStateProperties.WATERLOGGED)) {
+            if (level.isClientSide()) return InteractionResult.SUCCESS;
+            composite.replacePart(part.id(), state.setValue(BlockStateProperties.WATERLOGGED, true)
+                    .setValue(LavaLogging.LAVA_LOGGED, false));
+            level.scheduleTick(pos, net.minecraft.world.level.material.Fluids.WATER,
+                    net.minecraft.world.level.material.Fluids.WATER.getTickDelay(level));
+            if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.BUCKET));
+            level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BUCKET_EMPTY, SoundSource.BLOCKS, 1, 1);
+            return InteractionResult.SUCCESS_SERVER;
+        }
+        if (held.is(Items.LAVA_BUCKET) && !state.getValue(BlockStateProperties.WATERLOGGED)
+                && !state.getValue(LavaLogging.LAVA_LOGGED)) {
+            if (level.isClientSide()) return InteractionResult.SUCCESS;
+            composite.replacePart(part.id(), state.setValue(LavaLogging.LAVA_LOGGED, true));
+            level.scheduleTick(pos, net.minecraft.world.level.material.Fluids.LAVA,
+                    net.minecraft.world.level.material.Fluids.LAVA.getTickDelay(level));
+            consumeLavaBucket(player, hand);
+            level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BUCKET_EMPTY_LAVA, SoundSource.BLOCKS, 1, 1);
+            return InteractionResult.SUCCESS_SERVER;
+        }
+        if (held.is(Items.BUCKET) && state.getValue(LavaLogging.LAVA_LOGGED)) {
+            if (level.isClientSide()) return InteractionResult.SUCCESS;
+            composite.replacePart(part.id(), state.setValue(LavaLogging.LAVA_LOGGED, false));
+            if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.LAVA_BUCKET));
+            level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BUCKET_FILL_LAVA, SoundSource.BLOCKS, 1, 1);
+            return InteractionResult.SUCCESS_SERVER;
+        }
+        if (held.is(Items.BUCKET) && state.getValue(BlockStateProperties.WATERLOGGED)) {
+            if (level.isClientSide()) return InteractionResult.SUCCESS;
+            composite.replacePart(part.id(), state.setValue(BlockStateProperties.WATERLOGGED, false));
+            if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.WATER_BUCKET));
+            level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BUCKET_FILL, SoundSource.BLOCKS, 1, 1);
+            return InteractionResult.SUCCESS_SERVER;
+        }
+        return null;
     }
 
     private static void consumeLavaBucket(net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {

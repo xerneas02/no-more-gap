@@ -7,7 +7,8 @@
     "PlantSupportMixin",
     "WaterloggedStateDefinitionMixin",
     "LavaLoggedFluidStateMixin",
-    "LavaLoggedDefaultStateMixin"
+    "LavaLoggedDefaultStateMixin",
+    "LavaLoggingReactionMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -7,12 +7,15 @@ import fr.xerneas02.nomoregap.geometry.LocalTransform;
 import fr.xerneas02.nomoregap.geometry.OverlapTester;
 import fr.xerneas02.nomoregap.geometry.SurfaceExtractor;
 import fr.xerneas02.nomoregap.registry.ModBlocks;
+import fr.xerneas02.nomoregap.lava.LavaLogging;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SlabBlock;
@@ -33,6 +36,24 @@ public final class CompositePlacementHandler {
             var held = player.getItemInHand(hand);
             var originalPos = hit.getBlockPos();
             var original = level.getBlockState(originalPos);
+            if (held.is(Items.BUCKET) && isLavaLogged(original)) {
+                if (level.isClientSide()) return InteractionResult.SUCCESS;
+                level.setBlock(originalPos, original.setValue(LavaLogging.LAVA_LOGGED, false), Block.UPDATE_ALL);
+                if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.LAVA_BUCKET));
+                level.playSound(null, originalPos, net.minecraft.sounds.SoundEvents.BUCKET_FILL_LAVA,
+                        SoundSource.BLOCKS, 1, 1);
+                return InteractionResult.SUCCESS_SERVER;
+            }
+            if (held.is(Items.LAVA_BUCKET) && canLavaLog(original)) {
+                if (level.isClientSide()) return InteractionResult.SUCCESS;
+                level.setBlock(originalPos, original.setValue(LavaLogging.LAVA_LOGGED, true), Block.UPDATE_ALL);
+                level.scheduleTick(originalPos, net.minecraft.world.level.material.Fluids.LAVA,
+                        net.minecraft.world.level.material.Fluids.LAVA.getTickDelay(level));
+                consumeLavaBucket(player, hand);
+                level.playSound(null, originalPos, net.minecraft.sounds.SoundEvents.BUCKET_EMPTY_LAVA,
+                        SoundSource.BLOCKS, 1, 1);
+                return InteractionResult.SUCCESS_SERVER;
+            }
             if ((original.getBlock() instanceof SlabBlock || original.getBlock() instanceof SnowLayerBlock)
                     && held.getItem() instanceof BlockItem blockItem && blockItem.getBlock() == original.getBlock()) {
                 return InteractionResult.PASS;
@@ -120,18 +141,42 @@ public final class CompositePlacementHandler {
     private static InteractionResult addFootCover(net.minecraft.world.entity.player.Player player, net.minecraft.world.level.Level level,
                                                   net.minecraft.world.InteractionHand hand, net.minecraft.core.BlockPos pos,
                                                   BlockState original, Item item) {
-        if (!level.setBlock(pos, ModBlocks.COMPOSITE.defaultBlockState(), Block.UPDATE_ALL)) return InteractionResult.FAIL;
+        BlockState doorTop = null;
+        if (original.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                && original.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+            var candidate = level.getBlockState(pos.above());
+            if (candidate.getBlock() == original.getBlock()) doorTop = candidate;
+        }
+        if (!level.setBlock(pos, ModBlocks.COMPOSITE.defaultBlockState(),
+                Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS)) return InteractionResult.FAIL;
         if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)) {
             level.setBlock(pos, original, Block.UPDATE_ALL);
             return InteractionResult.FAIL;
         }
         composite.addPart(original, LocalTransform.IDENTITY, 0);
         composite.addPart(((BlockItem) item).getBlock().defaultBlockState(), LocalTransform.IDENTITY, 0);
+        if (doorTop != null) level.setBlock(pos.above(), doorTop, Block.UPDATE_CLIENTS);
         if (!player.isCreative()) player.getItemInHand(hand).shrink(1);
         var sound = ((BlockItem) item).getBlock().defaultBlockState().getSoundType();
         level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS,
                 (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
         return InteractionResult.SUCCESS_SERVER;
+    }
+
+    private static boolean canLavaLog(BlockState state) {
+        return state.hasProperty(BlockStateProperties.WATERLOGGED)
+                && state.hasProperty(LavaLogging.LAVA_LOGGED)
+                && !state.getValue(BlockStateProperties.WATERLOGGED)
+                && !state.getValue(LavaLogging.LAVA_LOGGED);
+    }
+
+    private static boolean isLavaLogged(BlockState state) {
+        return state.hasProperty(LavaLogging.LAVA_LOGGED) && state.getValue(LavaLogging.LAVA_LOGGED);
+    }
+
+    private static void consumeLavaBucket(net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
+        if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.BUCKET));
     }
 
     private record CoverTarget(net.minecraft.core.BlockPos pos, BlockState state) {}

@@ -29,6 +29,16 @@ public final class PartContainer {
 
     public Optional<PartInstance> find(int id) { return parts.stream().filter(part -> part.id() == id).findFirst(); }
     public boolean remove(int id) { return parts.removeIf(part -> part.id() == id); }
+    public boolean replace(int id, BlockState state) {
+        for (int i = 0; i < parts.size(); i++) {
+            var part = parts.get(i);
+            if (part.id() == id) {
+                parts.set(i, new PartInstance(id, state, part.transform(), part.flags()));
+                return true;
+            }
+        }
+        return false;
+    }
     public void clear() { parts.clear(); }
     public List<PartInstance> view() { return Collections.unmodifiableList(parts); }
     public boolean isEmpty() { return parts.isEmpty(); }

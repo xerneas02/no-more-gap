@@ -117,6 +117,11 @@ public final class CompositeBlock extends BaseEntityBlock {
             level.playSound(null, pos, sound.getBreakSound(), SoundSource.BLOCKS,
                     (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
             if (target.id() == composite.parts().view().getFirst().id()) {
+                if (target.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                        && target.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                        == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+                    level.removeBlock(pos.above(), false);
+                }
                 for (var part : composite.parts().view()) {
                     if (player.hasCorrectToolForDrops(part.state())) {
                         Block.dropResources(part.state(), server, pos, null, player, tool);

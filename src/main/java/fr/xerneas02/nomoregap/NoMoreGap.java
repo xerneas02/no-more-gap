@@ -3,6 +3,7 @@ package fr.xerneas02.nomoregap;
 import fr.xerneas02.nomoregap.command.NoMoreGapDebugCommand;
 import fr.xerneas02.nomoregap.interaction.CompositePlacementHandler;
 import fr.xerneas02.nomoregap.interaction.CreativeCompositeBreakingHandler;
+import fr.xerneas02.nomoregap.interaction.CompositeInteractionHandler;
 import fr.xerneas02.nomoregap.network.NoMoreGapNetworking;
 import fr.xerneas02.nomoregap.registry.ModRegistries;
 import net.fabricmc.api.ModInitializer;
@@ -22,5 +23,6 @@ public final class NoMoreGap implements ModInitializer {
         NoMoreGapDebugCommand.initialize();
         CompositePlacementHandler.initialize();
         CreativeCompositeBreakingHandler.initialize();
+        CompositeInteractionHandler.initialize();
     }
 }

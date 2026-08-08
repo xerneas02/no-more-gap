@@ -46,6 +46,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                     .getBlockStateModelSet().get(part.state());
             state.x[i] = part.transform().xDouble();
             state.y[i] = part.transform().yDouble();
+            state.snow[i] = part.state().getBlock() instanceof net.minecraft.world.level.block.SnowLayerBlock;
             state.z[i] = part.transform().zDouble();
             state.rotation[i] = part.transform().degrees();
             var samplePos = entity.getBlockPos().offset(
@@ -62,6 +63,11 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         for (int i = 0; i < state.count; i++) {
             pose.pushPose();
             pose.translate(state.x[i], state.y[i], state.z[i]);
+            if (state.snow[i]) {
+                pose.translate(0.5, 0, 0.5);
+                pose.scale(0.996f, 1, 0.996f);
+                pose.translate(-0.5, 0, -0.5);
+            }
             pose.rotateAround(Axis.YP.rotationDegrees(state.rotation[i]), 0.5f, 0, 0.5f);
             state.models[i].submit(pose, collector, state.lights[i], OverlayTexture.NO_OVERLAY, 0);
             if (i == state.breakingIndex && state.breakProgress != null) {
@@ -80,6 +86,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         private final double[] z = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] rotation = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] lights = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final boolean[] snow = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private int count;
         private int breakingIndex = -1;
 

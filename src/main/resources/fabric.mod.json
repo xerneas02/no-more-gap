@@ -11,6 +11,7 @@
     "main": ["fr.xerneas02.nomoregap.NoMoreGap"],
     "client": ["fr.xerneas02.nomoregap.NoMoreGapClient"]
   },
+  "mixins": ["no_more_gap.mixins.json"],
   "depends": {
     "fabricloader": ">=0.19.3",
     "minecraft": "~26.1.2",

@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "fr.xerneas02.nomoregap.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "DoorBlockMixin",
+    "PlantSupportMixin",
+    "WaterloggedStateDefinitionMixin",
+    "LavaLoggedFluidStateMixin",
+    "LavaLoggedDefaultStateMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

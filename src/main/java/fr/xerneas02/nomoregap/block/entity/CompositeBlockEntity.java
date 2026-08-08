@@ -60,6 +60,12 @@ public final class CompositeBlockEntity extends BlockEntity {
         return true;
     }
 
+    public boolean replacePart(int id, BlockState state) {
+        if (!parts.replace(id, state)) return false;
+        changed();
+        return true;
+    }
+
     public void clearParts() {
         if (parts.isEmpty()) return;
         parts.clear();

@@ -16,7 +16,7 @@ public final class ModBlocks {
     public static final ResourceKey<Block> COMPOSITE_PROXY_KEY = ResourceKey.create(Registries.BLOCK, NoMoreGap.id("composite_proxy"));
     public static final Block COMPOSITE = Registry.register(BuiltInRegistries.BLOCK, COMPOSITE_KEY,
             new CompositeBlock(BlockBehaviour.Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.OAK_SLAB)
-                    .setId(COMPOSITE_KEY).sound(SoundType.EMPTY).noOcclusion()
+                    .setId(COMPOSITE_KEY).sound(SoundType.EMPTY).noOcclusion().noLootTable()
                     .lightLevel(state -> state.getValue(CompositeBlock.LAVA) ? 15 : state.getValue(CompositeBlock.LIT) ? 14 : 0)));
     public static final Block COMPOSITE_PROXY = Registry.register(BuiltInRegistries.BLOCK, COMPOSITE_PROXY_KEY,
             new CompositeProxyBlock(BlockBehaviour.Properties.of().setId(COMPOSITE_PROXY_KEY)

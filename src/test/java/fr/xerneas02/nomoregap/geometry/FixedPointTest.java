@@ -22,7 +22,8 @@ class FixedPointTest {
         assertDoesNotThrow(() -> new FixedPoint(FixedPoint.MAX_UNITS));
         assertEquals(FixedPoint.MIN_UNITS, FixedPoint.fromDouble(-1).units());
         assertThrows(IllegalArgumentException.class, () -> new FixedPoint(FixedPoint.MAX_UNITS + 1));
-        assertThrows(IllegalArgumentException.class, () -> FixedPoint.FULL_BLOCK.add(FixedPoint.FULL_BLOCK).add(new FixedPoint(1)));
+        assertDoesNotThrow(() -> FixedPoint.FULL_BLOCK.add(FixedPoint.FULL_BLOCK).add(new FixedPoint(1)));
+        assertThrows(IllegalArgumentException.class, () -> new FixedPoint(FixedPoint.MAX_UNITS).add(new FixedPoint(1)));
         assertThrows(IllegalArgumentException.class, () -> FixedPoint.fromDouble(Double.NaN));
     }
 }

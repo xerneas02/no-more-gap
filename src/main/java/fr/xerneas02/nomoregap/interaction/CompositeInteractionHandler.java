@@ -5,7 +5,13 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.ComparatorBlock;
+import net.minecraft.world.level.block.DaylightDetectorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.RepeaterBlock;
+import net.minecraft.world.level.block.TntBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
@@ -29,10 +35,29 @@ public final class CompositeInteractionHandler {
             }
             if (composite == null || composite.parts().isEmpty()) return InteractionResult.PASS;
             var targetComposite = composite;
-            var part = PartRaycaster.raycast(targetComposite, level, player, 6)
-                    .flatMap(result -> targetComposite.parts().find(result.partId()))
-                    .orElse(composite.parts().view().getFirst());
+            var target = PartRaycaster.raycast(targetComposite, level, player, 6)
+                    .flatMap(result -> targetComposite.parts().find(result.partId()));
+            if (target.isEmpty()) return InteractionResult.PASS;
+            var part = target.get();
             var state = part.state();
+            if (isDirectlyUsable(state)) {
+                if (level.isClientSide()) return InteractionResult.SUCCESS;
+                CompositeUseContext.begin(level, compositePos, composite, part.id());
+                try {
+                    var partHit = new net.minecraft.world.phys.BlockHitResult(hit.getLocation(), hit.getDirection(), compositePos, hit.isInside());
+                    if (state.getBlock() instanceof TntBlock) {
+                        var result = state.useItemOn(player.getItemInHand(hand), level, player, hand, partHit);
+                        return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
+                    }
+                    var result = state.useWithoutItem(level, player, partHit);
+                    if (result.consumesAction() && state.getBlock() instanceof ButtonBlock button) {
+                        level.scheduleTick(compositePos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE, 20);
+                    }
+                    return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
+                } finally {
+                    CompositeUseContext.end();
+                }
+            }
             if (!(state.getBlock() instanceof DoorBlock) && !(state.getBlock() instanceof FenceGateBlock)
                     && !(state.getBlock() instanceof TrapDoorBlock)) return InteractionResult.PASS;
             if (state.getBlock() instanceof DoorBlock door && !door.type().canOpenByHand()) return InteractionResult.PASS;
@@ -52,6 +77,12 @@ public final class CompositeInteractionHandler {
             }
             return InteractionResult.SUCCESS_SERVER;
         });
+    }
+
+    private static boolean isDirectlyUsable(net.minecraft.world.level.block.state.BlockState state) {
+        var block = state.getBlock();
+        return block instanceof LeverBlock || block instanceof ButtonBlock || block instanceof DaylightDetectorBlock
+                || block instanceof RepeaterBlock || block instanceof ComparatorBlock || block instanceof TntBlock;
     }
 
     private static void syncCompositeDoor(CompositeBlockEntity composite, net.minecraft.world.level.block.state.BlockState state,

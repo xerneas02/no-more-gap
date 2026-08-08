@@ -1,6 +1,7 @@
 package fr.xerneas02.nomoregap.interaction;
 
 import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
+import fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity;
 import fr.xerneas02.nomoregap.block.CompositeBlock;
 import fr.xerneas02.nomoregap.geometry.FixedPoint;
 import fr.xerneas02.nomoregap.geometry.LocalTransform;
@@ -35,10 +36,16 @@ public final class CompositePlacementHandler {
     public static void initialize() {
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             var held = player.getItemInHand(hand);
-            var originalPos = hit.getBlockPos();
+            var effectiveHit = hit;
+            if (level.getBlockEntity(hit.getBlockPos()) instanceof CompositeProxyBlockEntity proxy
+                    && level.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity) {
+                effectiveHit = new net.minecraft.world.phys.BlockHitResult(
+                        hit.getLocation(), hit.getDirection(), proxy.anchor(), hit.isInside());
+            }
+            var originalPos = effectiveHit.getBlockPos();
             var original = level.getBlockState(originalPos);
             if (held.getItem() instanceof BlockItem blockItem && original.getFluidState().is( net.minecraft.world.level.material.Fluids.LAVA)) {
-                var placed = blockItem.getBlock().getStateForPlacement(new BlockPlaceContext(player, hand, held, hit));
+                var placed = blockItem.getBlock().getStateForPlacement(new BlockPlaceContext(player, hand, held, effectiveHit));
                 if (placed != null && canLavaLog(placed)) {
                     if (level.isClientSide()) return InteractionResult.SUCCESS;
                     level.setBlock(originalPos, placed.setValue(LavaLogging.LAVA_LOGGED, true), Block.UPDATE_ALL);
@@ -84,23 +91,23 @@ public final class CompositePlacementHandler {
                     && held.getItem() instanceof BlockItem blockItem && blockItem.getBlock() == original.getBlock()) {
                 return InteractionResult.PASS;
             }
-            var coverTarget = footCoverTarget(level, hit, originalPos, original, held.getItem(), player);
+            var coverTarget = footCoverTarget(level, effectiveHit, originalPos, original, held.getItem(), player);
             if (player.isSecondaryUseActive() && coverTarget != null) {
                 if (level.isClientSide()) return InteractionResult.SUCCESS;
                 return addFootCover(player, level, hand, coverTarget.pos(), coverTarget.state(), held.getItem());
             }
-            var existingComposite = level.getBlockEntity(hit.getBlockPos()) instanceof CompositeBlockEntity existing ? existing : null;
+            var existingComposite = level.getBlockEntity(originalPos) instanceof CompositeBlockEntity existing ? existing : null;
             boolean footComposite = existingComposite != null && existingComposite.parts().view().stream().anyMatch(part ->
                     part.state().getBlock() instanceof SnowLayerBlock || part.state().getBlock() instanceof CarpetBlock
                             || part.state().getBlock() instanceof MossyCarpetBlock);
-            if ((!player.isSecondaryUseActive() && !footComposite) || hit.getDirection() != Direction.UP
+            if ((!player.isSecondaryUseActive() && !footComposite) || effectiveHit.getDirection() != Direction.UP
                     || (!footComposite && !matches(original, held.getItem()))
-                    || (existingComposite != null && !footComposite)) {
+                    || original.getBlock() == ModBlocks.COMPOSITE_PROXY) {
                 return InteractionResult.PASS;
             }
             var block = ((BlockItem) held.getItem()).getBlock();
             if (block instanceof EntityBlock) return InteractionResult.PASS;
-            var placed = block.getStateForPlacement(new BlockPlaceContext(player, hand, held, hit));
+            var placed = block.getStateForPlacement(new BlockPlaceContext(player, hand, held, effectiveHit));
             if (placed == null) {
                 placed = block.defaultBlockState();
                 if (placed.hasProperty(BlockStateProperties.ATTACH_FACE)) {
@@ -110,45 +117,55 @@ public final class CompositePlacementHandler {
                     placed = placed.setValue(BlockStateProperties.HORIZONTAL_FACING, player.getDirection().getOpposite());
                 }
             }
-            double localX = hit.getLocation().x - hit.getBlockPos().getX();
-            double localZ = hit.getLocation().z - hit.getBlockPos().getZ();
+            double localX = effectiveHit.getLocation().x - originalPos.getX();
+            double localZ = effectiveHit.getLocation().z - originalPos.getZ();
             var context = CollisionContext.of(player);
-            var occupied = original.getCollisionShape(level, hit.getBlockPos(), context);
+            var occupied = original.getCollisionShape(level, originalPos, context);
             var surface = SurfaceExtractor.topAt(occupied, localX, localZ);
             if (surface.isEmpty()) return InteractionResult.PASS;
             var transform = new LocalTransform(FixedPoint.ZERO, surface.get().y(), FixedPoint.ZERO, 0);
-            var placedShape = placed.getShape(level, hit.getBlockPos(), context);
-            // ponytail: oversized parts do not reserve adjacent cells; add multi-cell ownership when cross-cell collisions matter.
+            var placedShape = placed.getShape(level, originalPos, context);
             if (OverlapTester.overlaps(occupied, placedShape, transform)) {
                 return InteractionResult.PASS;
+            }
+            int addedParts = 1 + (existingComposite == null ? 1 : 0)
+                    + (placed.getBlock() instanceof net.minecraft.world.level.block.DoorBlock ? 1 : 0);
+            if ((existingComposite == null ? 0 : existingComposite.parts().size()) + addedParts
+                    > fr.xerneas02.nomoregap.util.NoMoreGapLimits.MAX_PARTS_PER_CELL) {
+                return InteractionResult.FAIL;
             }
             if (level.isClientSide()) return InteractionResult.SUCCESS;
 
             CompositeBlockEntity composite = existingComposite;
             if (composite == null) {
-                if (!level.setBlock(hit.getBlockPos(), ModBlocks.COMPOSITE.defaultBlockState(), Block.UPDATE_ALL)) {
+                if (!level.setBlock(originalPos, ModBlocks.COMPOSITE.defaultBlockState(), Block.UPDATE_ALL)) {
                     return InteractionResult.FAIL;
                 }
-                if (!(level.getBlockEntity(hit.getBlockPos()) instanceof CompositeBlockEntity created)) {
-                    level.setBlock(hit.getBlockPos(), original, Block.UPDATE_ALL);
+                if (!(level.getBlockEntity(originalPos) instanceof CompositeBlockEntity created)) {
+                    level.setBlock(originalPos, original, Block.UPDATE_ALL);
                     return InteractionResult.FAIL;
                 }
                 composite = created;
-                composite.addPart(original, LocalTransform.IDENTITY, 0);
             }
-            composite.addPart(placed, transform, 0);
-            if (placed.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
-                    && placed.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
-                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
-                var top = placed.setValue(net.minecraft.world.level.block.DoorBlock.HALF,
-                        net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER);
-                composite.addPart(top, new LocalTransform(transform.x(), transform.y().add(FixedPoint.FULL_BLOCK),
-                        transform.z(), transform.quarterTurns()), 0);
+            composite.beginUpdate();
+            try {
+                if (existingComposite == null) composite.addPart(original, LocalTransform.IDENTITY, 0);
+                composite.addPart(placed, transform, 0);
+                if (placed.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                        && placed.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                        == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+                    var top = placed.setValue(net.minecraft.world.level.block.DoorBlock.HALF,
+                            net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER);
+                    composite.addPart(top, new LocalTransform(transform.x(), transform.y().add(FixedPoint.FULL_BLOCK),
+                            transform.z(), transform.quarterTurns()), 0);
+                }
+            } finally {
+                composite.endUpdate();
             }
-            CompositePartUpdater.refreshAround(level, hit.getBlockPos());
+            CompositePartUpdater.refreshAround(level, originalPos);
             if (!player.isCreative()) held.shrink(1);
             var sound = placed.getSoundType();
-            level.playSound(null, hit.getBlockPos(), sound.getPlaceSound(), SoundSource.BLOCKS,
+            level.playSound(null, originalPos, sound.getPlaceSound(), SoundSource.BLOCKS,
                     (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
             return InteractionResult.SUCCESS_SERVER;
         });
@@ -200,8 +217,13 @@ public final class CompositePlacementHandler {
             level.setBlock(pos, original, Block.UPDATE_ALL);
             return InteractionResult.FAIL;
         }
-        composite.addPart(original, LocalTransform.IDENTITY, 0);
-        composite.addPart(((BlockItem) item).getBlock().defaultBlockState(), LocalTransform.IDENTITY, 0);
+        composite.beginUpdate();
+        try {
+            composite.addPart(original, LocalTransform.IDENTITY, 0);
+            composite.addPart(((BlockItem) item).getBlock().defaultBlockState(), LocalTransform.IDENTITY, 0);
+        } finally {
+            composite.endUpdate();
+        }
         CompositePartUpdater.refreshAround(level, pos);
         if (doorTop != null) level.setBlock(pos.above(), doorTop, Block.UPDATE_CLIENTS);
         if (!player.isCreative()) player.getItemInHand(hand).shrink(1);

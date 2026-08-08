@@ -17,7 +17,7 @@ public final class SurfaceExtractor {
                 highest = box.maxY;
             }
         }
-        if (highest < 0 || highest >= 1) return Optional.empty();
+        if (highest < 0) return Optional.empty();
         return Optional.of(new SupportSurface(SupportSurface.Kind.TOP, Direction.UP,
                 FixedPoint.fromDouble(x), FixedPoint.fromDouble(highest), FixedPoint.fromDouble(z)));
     }

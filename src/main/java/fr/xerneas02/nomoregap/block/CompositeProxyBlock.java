@@ -13,9 +13,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.AABB;
 
 public final class CompositeProxyBlock extends BaseEntityBlock {
     public static final MapCodec<CompositeProxyBlock> CODEC = simpleCodec(CompositeProxyBlock::new);
@@ -27,25 +29,30 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
     @Override protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         if (!(world.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy)
                 || !(world.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite)) return Shapes.empty();
-        var anchor = proxy.anchor();
-        return composite.geometry(world, context).selection().move(
-                anchor.getX() - pos.getX(), anchor.getY() - pos.getY(), anchor.getZ() - pos.getZ());
+        return clipToCell(composite.geometry(world, context).selection(), composite.getBlockPos(), pos);
     }
 
     @Override protected VoxelShape getCollisionShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         if (!(world.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy)
                 || !(world.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite)) return Shapes.empty();
-        var anchor = proxy.anchor();
-        return composite.geometry(world, context).collision().move(
-                anchor.getX() - pos.getX(), anchor.getY() - pos.getY(), anchor.getZ() - pos.getZ());
+        return clipToCell(composite.geometry(world, context).collision(), composite.getBlockPos(), pos);
     }
 
     @Override protected float getDestroyProgress(BlockState state, Player player, BlockGetter world, BlockPos pos) {
         if (world.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy
+                && world.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite
+                && occupiesCell(composite, world, pos)
                 && world.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock anchorBlock) {
             return anchorBlock.getDestroyProgress(world.getBlockState(proxy.anchor()), player, world, proxy.anchor());
         }
-        return 0;
+        return 1;
+    }
+
+    @Override protected boolean canBeReplaced(BlockState state, BlockPlaceContext context) {
+        var pos = context.getClickedPos();
+        return !(context.getLevel().getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy)
+                || !(context.getLevel().getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite)
+                || !occupiesCell(composite, context.getLevel(), pos);
     }
 
     @Override protected void attack(BlockState state, Level level, BlockPos pos, Player player) {
@@ -70,5 +77,25 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
                 && level.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock anchorBlock) {
             anchorBlock.spawnDestroyParticles(level, player, proxy.anchor(), level.getBlockState(proxy.anchor()));
         }
+    }
+
+    private static boolean occupiesCell(CompositeBlockEntity composite, BlockGetter world, BlockPos proxyPos) {
+        return !clipToCell(composite.geometry(world, CollisionContext.empty()).selection(),
+                composite.getBlockPos(), proxyPos).isEmpty();
+    }
+
+    /** Converts anchor-local geometry to the local coordinates of one proxy cell. */
+    private static VoxelShape clipToCell(VoxelShape source, BlockPos anchor, BlockPos cell) {
+        int x = cell.getX() - anchor.getX(), y = cell.getY() - anchor.getY(), z = cell.getZ() - anchor.getZ();
+        VoxelShape clipped = Shapes.empty();
+        for (var box : source.toAabbs()) {
+            double minX = Math.max(box.minX, x), minY = Math.max(box.minY, y), minZ = Math.max(box.minZ, z);
+            double maxX = Math.min(box.maxX, x + 1), maxY = Math.min(box.maxY, y + 1), maxZ = Math.min(box.maxZ, z + 1);
+            if (minX < maxX && minY < maxY && minZ < maxZ) {
+                clipped = Shapes.or(clipped, Shapes.create(new AABB(minX - x, minY - y, minZ - z,
+                        maxX - x, maxY - y, maxZ - z)));
+            }
+        }
+        return clipped;
     }
 }

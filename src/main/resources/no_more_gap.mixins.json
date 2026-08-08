@@ -9,6 +9,9 @@
     "LavaLoggedFluidStateMixin",
     "LavaLoggedNeighborTickMixin",
     "CompositeNeighborStateMixin",
+    "CompositeInteractionSetBlockMixin",
+    "BlockNeighborChangedInvoker",
+    "BlockTickInvoker",
     "LavaLoggedDefaultStateMixin",
     "LavaLoggingReactionMixin"
   ],

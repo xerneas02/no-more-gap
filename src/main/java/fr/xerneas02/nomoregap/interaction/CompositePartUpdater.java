@@ -1,14 +1,19 @@
 package fr.xerneas02.nomoregap.interaction;
 
 import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
+import fr.xerneas02.nomoregap.mixin.BlockNeighborChangedInvoker;
+import fr.xerneas02.nomoregap.mixin.BlockTickInvoker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.ComparatorBlock;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.TntBlock;
+import net.minecraft.world.level.block.RepeaterBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -27,6 +32,21 @@ public final class CompositePartUpdater {
     private static void refresh(Level level, BlockPos pos) {
         if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)) return;
         for (var part : java.util.List.copyOf(composite.parts().view())) {
+            if (part.state().getBlock() instanceof TntBlock && level.hasNeighborSignal(pos)) {
+                CompositeUseContext.run(level, pos, composite, part.id(), () ->
+                        ((BlockNeighborChangedInvoker) part.state().getBlock()).noMoreGap$neighborChanged(part.state(), level, pos,
+                                net.minecraft.world.level.block.Blocks.AIR, null, false));
+                continue;
+            }
+            if (level instanceof net.minecraft.server.level.ServerLevel server
+                    && (part.state().getBlock() instanceof RepeaterBlock || part.state().getBlock() instanceof ComparatorBlock)) {
+                CompositeUseContext.run(level, pos, composite, part.id(), () -> {
+                    var block = part.state().getBlock();
+                    ((BlockNeighborChangedInvoker) block).noMoreGap$neighborChanged(part.state(), level, pos,
+                            net.minecraft.world.level.block.Blocks.AIR, null, false);
+                    ((BlockTickInvoker) block).noMoreGap$tick(part.state(), server, pos, RandomSource.create());
+                });
+            }
             var updated = refreshRedstone(level, pos, part.state());
             updated = refreshConnections(level, pos, updated);
             if (updated != part.state()) {

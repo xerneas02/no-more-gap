@@ -20,19 +20,24 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.List;
 
 public final class CompositeBlockEntity extends BlockEntity {
     private final PartContainer parts = new PartContainer();
     private final CompositeGeometryCache geometry = new CompositeGeometryCache();
     private long revision;
     private boolean geometryDirty = true;
+    private final Set<BlockPos> proxyPositions = new HashSet<>();
+    private int updateDepth;
+    private boolean updatePending;
 
     public CompositeBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.COMPOSITE, pos, state); }
 
     public PartContainer parts() { return parts; }
     public long revision() { return revision; }
     public boolean isGeometryDirty() { return geometryDirty; }
-    public void geometryRebuilt() { geometryDirty = false; }
 
     public CompositeGeometryCache geometry(BlockGetter world, CollisionContext context) {
         if (!geometryDirty && geometry.isValid()) return geometry;
@@ -43,7 +48,7 @@ public final class CompositeBlockEntity extends BlockEntity {
             selection = Shapes.or(selection, ShapeTransformer.transform(part.state().getShape(world, worldPosition, context), part.transform()));
             occlusion = Shapes.or(occlusion, ShapeTransformer.transform(part.state().getOcclusionShape(), part.transform()));
         }
-        geometry.update(collision, selection, occlusion, java.util.List.of());
+        geometry.update(collision, selection, occlusion);
         geometryDirty = false;
         return geometry;
     }
@@ -72,7 +77,30 @@ public final class CompositeBlockEntity extends BlockEntity {
         changed();
     }
 
+    public void replaceParts(List<PartInstance> replacement) {
+        parts.replaceAll(replacement);
+        changed();
+    }
+
+    public void beginUpdate() { updateDepth++; }
+
+    public void endUpdate() {
+        if (updateDepth == 0) throw new IllegalStateException("No composite update is active");
+        if (--updateDepth == 0 && updatePending) {
+            updatePending = false;
+            changedNow();
+        }
+    }
+
     private void changed() {
+        if (updateDepth > 0) {
+            updatePending = true;
+            return;
+        }
+        changedNow();
+    }
+
+    private void changedNow() {
         revision++;
         geometryDirty = true;
         geometry.invalidate();
@@ -101,19 +129,21 @@ public final class CompositeBlockEntity extends BlockEntity {
 
     public void clearProxies() {
         if (level == null || level.isClientSide()) return;
-        for (int x = -1; x <= 2; x++) for (int y = -1; y <= 2; y++) for (int z = -1; z <= 2; z++) {
-            if (x == 0 && y == 0 && z == 0) continue;
-            var pos = worldPosition.offset(x, y, z);
+        if (proxyPositions.isEmpty()) findLoadedProxies();
+        for (var pos : Set.copyOf(proxyPositions)) {
             if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy && proxy.anchor().equals(worldPosition)) {
                 level.removeBlock(pos, false);
             }
         }
+        proxyPositions.clear();
     }
 
-    private void refreshProxies() {
+    /** Rebuilds every occupied neighbouring cell, including parts stacked above the anchor. */
+    public void refreshProxies() {
+        if (level == null || level.isClientSide()) return;
         clearProxies();
-        var collision = geometry(level, CollisionContext.empty());
-        for (var box : collision.collision().toAabbs()) {
+        var shape = geometry(level, CollisionContext.empty()).selection();
+        for (var box : shape.toAabbs()) {
             int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
             int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
             for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
@@ -123,8 +153,24 @@ public final class CompositeBlockEntity extends BlockEntity {
                 level.setBlock(pos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY.defaultBlockState(), Block.UPDATE_ALL);
                 if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy) {
                     proxy.setAnchor(worldPosition);
+                    proxyPositions.add(pos.immutable());
                     level.sendBlockUpdated(pos, proxy.getBlockState(), proxy.getBlockState(), Block.UPDATE_CLIENTS);
                 }
+            }
+        }
+    }
+
+    private void findLoadedProxies() {
+        if (level == null) return;
+        for (var box : geometry(level, CollisionContext.empty()).selection().toAabbs()) {
+            int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
+            int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
+            for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
+            if (x == 0 && y == 0 && z == 0) continue;
+            var pos = worldPosition.offset(x, y, z);
+            if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy && proxy.anchor().equals(worldPosition)) {
+                proxyPositions.add(pos.immutable());
+            }
             }
         }
     }

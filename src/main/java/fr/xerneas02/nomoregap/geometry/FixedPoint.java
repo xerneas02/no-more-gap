@@ -5,7 +5,13 @@ import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
 /** Fixed-point coordinate rounded to the nearest unit, with ties rounded away from zero. */
 public record FixedPoint(int units) {
     public static final int MIN_UNITS = -NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
-    public static final int MAX_UNITS = NoMoreGapLimits.FIXED_UNITS_PER_BLOCK * 2;
+    /**
+     * A composite may span several world cells.  Keeping the transform range tied
+     * to the part limit prevents a valid high part from being rejected during
+     * serialisation or placement.
+     */
+    public static final int MAX_UNITS = NoMoreGapLimits.FIXED_UNITS_PER_BLOCK
+            * (NoMoreGapLimits.MAX_PARTS_PER_CELL + 1);
     public static final FixedPoint ZERO = new FixedPoint(0);
     public static final FixedPoint HALF_BLOCK = new FixedPoint(128);
     public static final FixedPoint FULL_BLOCK = new FixedPoint(256);

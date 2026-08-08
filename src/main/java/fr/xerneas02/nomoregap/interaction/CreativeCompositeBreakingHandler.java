@@ -23,7 +23,7 @@ public final class CreativeCompositeBreakingHandler {
             var targetComposite = composite;
             var target = PartRaycaster.raycast(targetComposite, level, player, 6)
                     .flatMap(hit -> targetComposite.parts().find(hit.partId()));
-            if (target.isEmpty() || target.get().id() == composite.parts().view().getFirst().id()) return InteractionResult.PASS;
+            if (target.isEmpty()) return InteractionResult.PASS;
             if (level.isClientSide()) return InteractionResult.SUCCESS;
             if (target.get().state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock) {
                 var doorParts = targetComposite.parts().view().stream()

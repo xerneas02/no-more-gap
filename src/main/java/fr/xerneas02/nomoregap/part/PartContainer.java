@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.HashSet;
 
 public final class PartContainer {
     private final List<PartInstance> parts = new ArrayList<>();
@@ -40,6 +41,20 @@ public final class PartContainer {
         return false;
     }
     public void clear() { parts.clear(); }
+
+    /** Replaces the contents atomically while preserving stable part ids. */
+    public void replaceAll(List<PartInstance> replacement) {
+        if (replacement.size() > NoMoreGapLimits.MAX_PARTS_PER_CELL) {
+            throw new IllegalArgumentException("Composite is full");
+        }
+        var ids = new HashSet<Integer>();
+        for (var part : replacement) {
+            if (!ids.add(part.id())) throw new IllegalArgumentException("Duplicate part id: " + part.id());
+        }
+        parts.clear();
+        parts.addAll(replacement);
+        nextId = replacement.stream().mapToInt(PartInstance::id).max().orElse(-1) + 1;
+    }
     public List<PartInstance> view() { return Collections.unmodifiableList(parts); }
     public boolean isEmpty() { return parts.isEmpty(); }
     public int size() { return parts.size(); }

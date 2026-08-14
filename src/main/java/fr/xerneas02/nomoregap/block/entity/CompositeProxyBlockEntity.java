@@ -18,6 +18,14 @@ public final class CompositeProxyBlockEntity extends BlockEntity {
     public BlockPos anchor() { return anchor; }
     public void setAnchor(BlockPos anchor) { this.anchor = anchor.immutable(); setChanged(); }
 
+    @Override public Object getRenderData() {
+        if (level != null && level.getBlockEntity(anchor) instanceof CompositeBlockEntity composite) {
+            return new fr.xerneas02.nomoregap.renderdata.CompositeRenderData(composite.revision(),
+                    composite.parts().view(), worldPosition.subtract(anchor));
+        }
+        return null;
+    }
+
     @Override protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.putInt("anchor_x", anchor.getX()); output.putInt("anchor_y", anchor.getY()); output.putInt("anchor_z", anchor.getZ());
@@ -25,6 +33,14 @@ public final class CompositeProxyBlockEntity extends BlockEntity {
     @Override protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         anchor = new BlockPos(input.getIntOr("anchor_x", 0), input.getIntOr("anchor_y", 0), input.getIntOr("anchor_z", 0));
+        if (level != null && level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+        }
+    }
+    @Override public void setLevel(net.minecraft.world.level.Level level) {
+        super.setLevel(level);
+        if (level.isClientSide()) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(),
+                net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
     }
     @Override public Packet<ClientGamePacketListener> getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
     @Override public net.minecraft.nbt.CompoundTag getUpdateTag(HolderLookup.Provider registries) { return saveWithoutMetadata(registries); }

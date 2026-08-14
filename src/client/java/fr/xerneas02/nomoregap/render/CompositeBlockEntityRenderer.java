@@ -33,6 +33,8 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
     @Override public State createRenderState() { return new State(); }
     @Override public boolean shouldRenderOffScreen() { return true; }
     @Override public boolean shouldRender(CompositeBlockEntity entity, Vec3 camera) {
+        if (!entity.getBlockPos().equals(breakingAnchor)
+                && entity.parts().view().stream().allMatch(CompositeChunkModel::isChunkRendered)) return false;
         int distance = NoMoreGapConfig.renderDistanceBlocks(
                 net.minecraft.client.Minecraft.getInstance().options.renderDistance().get());
         return Vec3.atCenterOf(entity.getBlockPos()).closerThan(camera, distance);
@@ -56,6 +58,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         long lightTick = entity.getLevel() == null ? 0 : entity.getLevel().getGameTime() / 20;
         // ponytail: one-second light refresh; move this to light-update notifications if visible delay becomes a problem.
         if (state.lightTick != lightTick) for (int i = 0; i < state.count; i++) {
+            if (CompositeChunkModel.isChunkRendered(state.parts[i])) continue;
             var samplePos = entity.getBlockPos().offset(
                     (int) Math.floor(state.x[i] + 0.5), (int) Math.floor(state.y[i] + 0.5),
                     (int) Math.floor(state.z[i] + 0.5));
@@ -73,6 +76,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                     || part.state().getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY) continue;
             int i = state.count++;
             state.partIds[i] = part.id();
+            state.parts[i] = part;
             state.blockStates[i] = part.state();
             resolver.update(state.models[i], part.state(), displayContext);
             state.breakModels[i] = net.minecraft.client.Minecraft.getInstance().getModelManager()
@@ -113,7 +117,9 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                 pose.translate(-0.5, -0.5, -0.5);
             }
             pose.rotateAround(Axis.YP.rotationDegrees(state.rotation[i]), 0.5f, 0, 0.5f);
-            state.models[i].submit(pose, collector, state.lights[i], OverlayTexture.NO_OVERLAY, 0);
+            if (!CompositeChunkModel.isChunkRendered(state.parts[i])) {
+                state.models[i].submit(pose, collector, state.lights[i], OverlayTexture.NO_OVERLAY, 0);
+            }
             if (i == state.breakingIndex && state.breakingStage >= 0) {
                 collector.submitBreakingBlockModel(pose, state.breakModels[i], state.blockPos.asLong(),
                         state.breakingStage);
@@ -126,6 +132,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         private final BlockModelRenderState[] models = new BlockModelRenderState[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final BlockStateModel[] breakModels = new BlockStateModel[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final net.minecraft.world.level.block.state.BlockState[] blockStates = new net.minecraft.world.level.block.state.BlockState[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final fr.xerneas02.nomoregap.part.PartInstance[] parts = new fr.xerneas02.nomoregap.part.PartInstance[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final AABB[] partBounds = new AABB[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] partIds = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] x = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];

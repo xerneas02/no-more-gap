@@ -5,6 +5,8 @@
     "lit=false,water=true,lava=false": { "model": "no_more_gap:block/composite" },
     "lit=true,water=true,lava=false": { "model": "no_more_gap:block/composite" },
     "lit=false,water=false,lava=true": { "model": "no_more_gap:block/composite" },
-    "lit=true,water=false,lava=true": { "model": "no_more_gap:block/composite" }
+    "lit=true,water=false,lava=true": { "model": "no_more_gap:block/composite" },
+    "lit=false,water=true,lava=true": { "model": "no_more_gap:block/composite" },
+    "lit=true,water=true,lava=true": { "model": "no_more_gap:block/composite" }
   }
 }

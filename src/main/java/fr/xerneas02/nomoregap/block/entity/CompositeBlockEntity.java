@@ -14,6 +14,9 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.BlockGetter;
@@ -31,6 +34,7 @@ public final class CompositeBlockEntity extends BlockEntity {
     private long revision;
     private boolean geometryDirty = true;
     private final Set<BlockPos> proxyPositions = new HashSet<>();
+    private final Set<BlockPos> snowyGroundPositions = new HashSet<>();
     private int updateDepth;
     private boolean updatePending;
     private final java.util.Map<Long, Set<Integer>> scheduledParts = new HashMap<>();
@@ -41,6 +45,10 @@ public final class CompositeBlockEntity extends BlockEntity {
     public PartContainer parts() { return parts; }
     public long revision() { return revision; }
     public boolean isGeometryDirty() { return geometryDirty; }
+
+    @Override public Object getRenderData() {
+        return new fr.xerneas02.nomoregap.renderdata.CompositeRenderData(revision, parts.view(), BlockPos.ZERO);
+    }
 
     public void schedulePart(int id, long gameTime) {
         scheduledParts.computeIfAbsent(gameTime, ignored -> new HashSet<>()).add(id);
@@ -144,11 +152,46 @@ public final class CompositeBlockEntity extends BlockEntity {
             } else {
                 level.sendBlockUpdated(worldPosition, current, current, Block.UPDATE_CLIENTS);
             }
-            if (!level.isClientSide()) refreshProxies();
+            if (!level.isClientSide()) {
+                refreshProxies();
+                refreshSnowyGround();
+            }
             if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                 fr.xerneas02.nomoregap.lava.LavaLoggingReactions.tryReact(serverLevel, worldPosition);
             }
         }
+    }
+
+    private void refreshSnowyGround() {
+        if (level == null || level.isClientSide()) return;
+        int unit = fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
+        var required = new HashSet<BlockPos>();
+        for (var part : parts.view()) {
+            if (!(part.state().getBlock() instanceof SnowLayerBlock)
+                    || Math.floorMod(part.transform().y().units(), unit) != 0) continue;
+            required.add(worldPosition.offset(
+                    Math.floorDiv(part.transform().x().units(), unit),
+                    Math.floorDiv(part.transform().y().units(), unit) - 1,
+                    Math.floorDiv(part.transform().z().units(), unit)).immutable());
+        }
+        var affected = new HashSet<>(snowyGroundPositions);
+        affected.addAll(required);
+        for (var pos : affected) {
+            var state = level.getBlockState(pos);
+            if (!state.hasProperty(BlockStateProperties.SNOWY)) continue;
+            boolean snowy = required.contains(pos) || level.getBlockState(pos.above()).is(BlockTags.SNOW);
+            if (state.getValue(BlockStateProperties.SNOWY) != snowy) {
+                level.setBlock(pos, state.setValue(BlockStateProperties.SNOWY, snowy), Block.UPDATE_CLIENTS);
+            }
+        }
+        snowyGroundPositions.clear();
+        snowyGroundPositions.addAll(required);
+    }
+
+    @Override public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        parts.clear();
+        refreshSnowyGround();
+        super.preRemoveSideEffects(pos, state);
     }
 
     public void clearProxies() {
@@ -203,6 +246,10 @@ public final class CompositeBlockEntity extends BlockEntity {
                 proxyPositions.add(pos);
             }
         }
+        for (var pos : proxyPositions) {
+            var state = level.getBlockState(pos);
+            level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
+        }
     }
 
     private void findLoadedProxies() {
@@ -249,7 +296,32 @@ public final class CompositeBlockEntity extends BlockEntity {
         }
         geometryDirty = true;
         geometry.invalidate();
-        if (level != null) changed();
+        if (level != null) {
+            if (level.isClientSide()) invalidateRenderCells();
+            else changed();
+        }
+    }
+
+    @Override public void setLevel(net.minecraft.world.level.Level level) {
+        super.setLevel(level);
+        if (level.isClientSide()) invalidateRenderCells();
+    }
+
+    private void invalidateRenderCells() {
+        if (level == null || !level.isClientSide()) return;
+        var positions = new HashSet<BlockPos>();
+        positions.add(worldPosition);
+        for (var box : geometry(level, CollisionContext.empty()).selection().toAabbs()) {
+            int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
+            int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
+            for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
+                positions.add(worldPosition.offset(x, y, z));
+            }
+        }
+        for (var pos : positions) {
+            var state = level.getBlockState(pos);
+            level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
+        }
     }
 
     private static boolean isInternalPart(BlockState state) {

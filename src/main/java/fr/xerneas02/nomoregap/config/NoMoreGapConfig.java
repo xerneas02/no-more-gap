@@ -14,6 +14,8 @@ public final class NoMoreGapConfig {
     private static int renderDistanceChunks;
     private static int maxCompositeParts = NoMoreGapLimits.MAX_PARTS_PER_CELL;
     private static boolean lavaLoggingReactions = true;
+    private static boolean snowLoggedVegetationBiomeTint;
+    private static boolean snowyVegetationGeneration = true;
 
     private NoMoreGapConfig() {}
 
@@ -25,9 +27,13 @@ public final class NoMoreGapConfig {
             maxCompositeParts = boundedInt(properties, "max_composite_parts_default",
                     NoMoreGapLimits.MAX_PARTS_PER_CELL, 2, NoMoreGapLimits.MAX_PARTS_PER_CELL);
             lavaLoggingReactions = bool(properties, "do_lava_logging_reactions_default", true);
+            snowLoggedVegetationBiomeTint = bool(properties, "snow_logged_vegetation_biome_tint", false);
+            snowyVegetationGeneration = bool(properties, "snowy_vegetation_generation", true);
             properties.setProperty("composite_render_distance_chunks", Integer.toString(renderDistanceChunks));
             properties.setProperty("max_composite_parts_default", Integer.toString(maxCompositeParts));
             properties.setProperty("do_lava_logging_reactions_default", Boolean.toString(lavaLoggingReactions));
+            properties.setProperty("snow_logged_vegetation_biome_tint", Boolean.toString(snowLoggedVegetationBiomeTint));
+            properties.setProperty("snowy_vegetation_generation", Boolean.toString(snowyVegetationGeneration));
             Files.createDirectories(PATH.getParent());
             try (var writer = Files.newBufferedWriter(PATH)) {
                 properties.store(writer, "No More Gap configuration; render distance 0 follows Minecraft");
@@ -43,6 +49,8 @@ public final class NoMoreGapConfig {
 
     public static int maxCompositeParts() { return maxCompositeParts; }
     public static boolean lavaLoggingReactions() { return lavaLoggingReactions; }
+    public static boolean snowLoggedVegetationBiomeTint() { return snowLoggedVegetationBiomeTint; }
+    public static boolean snowyVegetationGeneration() { return snowyVegetationGeneration; }
 
     private static int boundedInt(Properties properties, String key, int fallback, int min, int max) {
         int value = Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)).trim());

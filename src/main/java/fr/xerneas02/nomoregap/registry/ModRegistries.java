@@ -6,5 +6,6 @@ public final class ModRegistries {
         ModBlocks.initialize();
         ModItems.initialize();
         ModBlockEntities.initialize();
+        fr.xerneas02.nomoregap.worldgen.SnowyVegetationFeature.initialize();
     }
 }

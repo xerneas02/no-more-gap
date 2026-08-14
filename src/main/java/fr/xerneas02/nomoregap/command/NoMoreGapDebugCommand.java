@@ -9,9 +9,11 @@ import fr.xerneas02.nomoregap.registry.ModBlocks;
 import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
@@ -19,12 +21,11 @@ import net.minecraft.world.phys.HitResult;
 
 public final class NoMoreGapDebugCommand {
     private static final int STRESS_TEST_FLAG = 1 << 30;
-    private static final Block[] STRESS_CARPETS = {
-            Blocks.WHITE_CARPET, Blocks.ORANGE_CARPET, Blocks.MAGENTA_CARPET, Blocks.LIGHT_BLUE_CARPET,
-            Blocks.YELLOW_CARPET, Blocks.LIME_CARPET, Blocks.PINK_CARPET, Blocks.GRAY_CARPET,
-            Blocks.LIGHT_GRAY_CARPET, Blocks.CYAN_CARPET, Blocks.PURPLE_CARPET, Blocks.BLUE_CARPET,
-            Blocks.BROWN_CARPET, Blocks.GREEN_CARPET, Blocks.RED_CARPET, Blocks.BLACK_CARPET
-    };
+    private static final Block[] STRESS_CARPETS = java.util.stream.Stream.of(
+            "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
+            "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black")
+            .map(color -> BuiltInRegistries.BLOCK.getValue(Identifier.withDefaultNamespace(color + "_carpet")))
+            .toArray(Block[]::new);
 
     private NoMoreGapDebugCommand() {}
 

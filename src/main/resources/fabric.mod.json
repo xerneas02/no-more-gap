@@ -14,7 +14,7 @@
   "mixins": ["no_more_gap.mixins.json"],
   "depends": {
     "fabricloader": ">=0.19.3",
-    "minecraft": "~26.1.2",
+    "minecraft": "~${minecraft_version}",
     "java": ">=25",
     "fabric-api": "*"
   }

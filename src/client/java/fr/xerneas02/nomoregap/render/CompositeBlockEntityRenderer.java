@@ -16,7 +16,6 @@ import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
@@ -55,17 +54,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                 break;
             }
         }
-        long lightTick = entity.getLevel() == null ? 0 : entity.getLevel().getGameTime() / 20;
-        // ponytail: one-second light refresh; move this to light-update notifications if visible delay becomes a problem.
-        if (state.lightTick != lightTick) for (int i = 0; i < state.count; i++) {
-            if (CompositeChunkModel.isChunkRendered(state.parts[i])) continue;
-            var samplePos = entity.getBlockPos().offset(
-                    (int) Math.floor(state.x[i] + 0.5), (int) Math.floor(state.y[i] + 0.5),
-                    (int) Math.floor(state.z[i] + 0.5));
-            state.lights[i] = entity.getLevel() == null ? state.lightCoords : LevelRenderer.getLightCoords(
-                    LevelRenderer.BrightnessGetter.DEFAULT, entity.getLevel(), state.blockStates[i], samplePos);
-        }
-        state.lightTick = lightTick;
+        for (int i = 0; i < state.count; i++) state.lights[i] = state.lightCoords;
     }
 
     private void rebuild(CompositeBlockEntity entity, State state) {
@@ -121,11 +110,27 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                 state.models[i].submit(pose, collector, state.lights[i], OverlayTexture.NO_OVERLAY, 0);
             }
             if (i == state.breakingIndex && state.breakingStage >= 0) {
-                collector.submitBreakingBlockModel(pose, state.breakModels[i], state.blockPos.asLong(),
-                        state.breakingStage);
+                submitBreakingModel(collector, pose, state.breakModels[i], state.blockPos.asLong(), state.breakingStage);
             }
             pose.popPose();
         }
+    }
+
+    private static void submitBreakingModel(SubmitNodeCollector collector, PoseStack pose, BlockStateModel model,
+                                            long pos, int stage) {
+        try {
+            for (var method : collector.getClass().getMethods()) {
+                if (!method.getName().equals("submitBreakingBlockModel")) continue;
+                if (method.getParameterCount() == 4) {
+                    method.invoke(collector, pose, model, pos, stage);
+                    return;
+                }
+                var parts = new java.util.ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
+                model.collectParts(net.minecraft.util.RandomSource.create(pos), parts);
+                method.invoke(collector, pose, parts, stage);
+                return;
+            }
+        } catch (ReflectiveOperationException ignored) {}
     }
 
     public static final class State extends BlockEntityRenderState {
@@ -143,7 +148,6 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         private final boolean[] formedRock = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private AABB bounds;
         private long revision = Long.MIN_VALUE;
-        private long lightTick = Long.MIN_VALUE;
         private int count;
         private int breakingIndex = -1;
         private int breakingStage = -1;

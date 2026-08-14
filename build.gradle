@@ -26,8 +26,8 @@ dependencies {
 }
 
 processResources {
-	inputs.property 'version', version
-	filesMatching('fabric.mod.json') { expand version: version }
+	inputs.properties version: version, minecraft_version: minecraft_version
+	filesMatching('fabric.mod.json') { expand version: version, minecraft_version: minecraft_version }
 }
 
 tasks.withType(JavaCompile).configureEach {

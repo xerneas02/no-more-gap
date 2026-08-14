@@ -28,7 +28,7 @@ class PartContainerTest {
         assertTrue(parts.isEmpty());
     }
 
-    @Test void rejectsSeventeenthAndDuplicateLoadedId() {
+    @Test void enforcesTechnicalLimitAndRejectsDuplicateLoadedId() {
         var parts = new PartContainer();
         for (int i = 0; i < NoMoreGapLimits.MAX_PARTS_PER_CELL; i++) parts.add(Blocks.STONE.defaultBlockState(), LocalTransform.IDENTITY, 0);
         assertEquals(NoMoreGapLimits.MAX_PARTS_PER_CELL, parts.size());

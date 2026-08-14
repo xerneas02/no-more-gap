@@ -1,3 +1,19 @@
 {
-  "block.no_more_gap.composite": "Composite Block"
+  "block.no_more_gap.composite": "Composite Block",
+  "advancements.no_more_gap.it_fits.title": "It Fits!",
+  "advancements.no_more_gap.it_fits.description": "Two blocks, one space.",
+  "advancements.no_more_gap.at_the_blocks_feet.title": "At the Block's Feet",
+  "advancements.no_more_gap.at_the_blocks_feet.description": "There's always room for a carpet.",
+  "advancements.no_more_gap.carpet_diem.title": "Carpet Diem",
+  "advancements.no_more_gap.carpet_diem.description": "Wall-to-wall carpeting, vertically.",
+  "advancements.no_more_gap.hot_bath.title": "A Very Hot Bath",
+  "advancements.no_more_gap.hot_bath.description": "Waterlogging, with extra consequences.",
+  "advancements.no_more_gap.obsidian_log.title": "Obsidian Log",
+  "advancements.no_more_gap.obsidian_log.description": "Turn lava logging into obsidian logging.",
+  "advancements.no_more_gap.compact_circuit.title": "Compact Circuit",
+  "advancements.no_more_gap.compact_circuit.description": "The lever and lamp already share the rent.",
+  "advancements.no_more_gap.open_to_everything.title": "Open to Everything",
+  "advancements.no_more_gap.open_to_everything.description": "Even the carpet fits under the door.",
+  "advancements.no_more_gap.stack_of_a_stack.title": "A Stack of a Stack",
+  "advancements.no_more_gap.stack_of_a_stack.description": "64 blocks. One space. No questions."
 }

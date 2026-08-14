@@ -1,0 +1,11 @@
+{
+  "parent": "no_more_gap:it_fits",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "description": { "translate": "advancements.no_more_gap.at_the_blocks_feet.description" },
+    "icon": { "id": "minecraft:white_carpet" },
+    "title": { "translate": "advancements.no_more_gap.at_the_blocks_feet.title" }
+  },
+  "requirements": [["done"]],
+  "sends_telemetry_event": false
+}

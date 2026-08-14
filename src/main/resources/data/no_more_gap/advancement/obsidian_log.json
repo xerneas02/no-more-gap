@@ -1,0 +1,11 @@
+{
+  "parent": "no_more_gap:hot_bath",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "description": { "translate": "advancements.no_more_gap.obsidian_log.description" },
+    "icon": { "id": "minecraft:obsidian" },
+    "title": { "translate": "advancements.no_more_gap.obsidian_log.title" }
+  },
+  "requirements": [["done"]],
+  "sends_telemetry_event": false
+}

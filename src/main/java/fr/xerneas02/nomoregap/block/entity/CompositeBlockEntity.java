@@ -20,9 +20,10 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
 
 public final class CompositeBlockEntity extends BlockEntity {
     private final PartContainer parts = new PartContainer();
@@ -32,6 +33,8 @@ public final class CompositeBlockEntity extends BlockEntity {
     private final Set<BlockPos> proxyPositions = new HashSet<>();
     private int updateDepth;
     private boolean updatePending;
+    private final java.util.Map<Long, Set<Integer>> scheduledParts = new HashMap<>();
+    private final java.util.Map<Integer, Integer> comparatorOutputs = new HashMap<>();
 
     public CompositeBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.COMPOSITE, pos, state); }
 
@@ -39,11 +42,30 @@ public final class CompositeBlockEntity extends BlockEntity {
     public long revision() { return revision; }
     public boolean isGeometryDirty() { return geometryDirty; }
 
+    public void schedulePart(int id, long gameTime) {
+        scheduledParts.computeIfAbsent(gameTime, ignored -> new HashSet<>()).add(id);
+    }
+
+    public Set<Integer> takeScheduledParts(long gameTime) {
+        var due = new HashSet<Integer>();
+        for (var time : new HashSet<>(scheduledParts.keySet())) {
+            if (time <= gameTime) due.addAll(scheduledParts.remove(time));
+        }
+        return due;
+    }
+
+    public int comparatorOutput(int id) { return comparatorOutputs.getOrDefault(id, 0); }
+    public void setComparatorOutput(int id, int output) {
+        if (comparatorOutputs.getOrDefault(id, 0) == output) return;
+        comparatorOutputs.put(id, output);
+        changed();
+    }
+
     public CompositeGeometryCache geometry(BlockGetter world, CollisionContext context) {
         if (!geometryDirty && geometry.isValid()) return geometry;
         VoxelShape collision = Shapes.empty(), selection = Shapes.empty(), occlusion = Shapes.empty();
         for (var part : parts.view()) {
-            if (part.state().getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE) continue;
+            if (isInternalPart(part.state())) continue;
             collision = Shapes.or(collision, ShapeTransformer.transform(part.state().getCollisionShape(world, worldPosition, context), part.transform()));
             selection = Shapes.or(selection, ShapeTransformer.transform(part.state().getShape(world, worldPosition, context), part.transform()));
             occlusion = Shapes.or(occlusion, ShapeTransformer.transform(part.state().getOcclusionShape(), part.transform()));
@@ -54,6 +76,7 @@ public final class CompositeBlockEntity extends BlockEntity {
     }
 
     public PartInstance addPart(BlockState state, fr.xerneas02.nomoregap.geometry.LocalTransform transform, int flags) {
+        if (isInternalPart(state)) throw new IllegalArgumentException("Composite internals cannot be stored as parts");
         var part = parts.add(state, transform, flags);
         changed();
         return part;
@@ -61,6 +84,7 @@ public final class CompositeBlockEntity extends BlockEntity {
 
     public boolean removePart(int id) {
         if (!parts.remove(id)) return false;
+        comparatorOutputs.remove(id);
         changed();
         return true;
     }
@@ -128,34 +152,55 @@ public final class CompositeBlockEntity extends BlockEntity {
     }
 
     public void clearProxies() {
+        clearProxiesExcept(null);
+    }
+
+    /** Leaves the currently mined proxy to vanilla, which removes it after playerDestroy returns. */
+    public void clearProxiesExcept(BlockPos preserved) {
         if (level == null || level.isClientSide()) return;
         if (proxyPositions.isEmpty()) findLoadedProxies();
         for (var pos : Set.copyOf(proxyPositions)) {
+            if (pos.equals(preserved)) continue;
             if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy && proxy.anchor().equals(worldPosition)) {
                 level.removeBlock(pos, false);
             }
         }
-        proxyPositions.clear();
+        proxyPositions.removeIf(pos -> !pos.equals(preserved));
     }
 
     /** Rebuilds every occupied neighbouring cell, including parts stacked above the anchor. */
     public void refreshProxies() {
         if (level == null || level.isClientSide()) return;
-        clearProxies();
+        var required = new HashSet<BlockPos>();
         var shape = geometry(level, CollisionContext.empty()).selection();
         for (var box : shape.toAabbs()) {
             int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
             int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
             for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
                 if (x == 0 && y == 0 && z == 0) continue;
-                var pos = worldPosition.offset(x, y, z);
-                if (!level.getBlockState(pos).isAir()) continue;
+                required.add(worldPosition.offset(x, y, z).immutable());
+            }
+        }
+        if (proxyPositions.isEmpty()) findLoadedProxies();
+        for (var pos : Set.copyOf(proxyPositions)) {
+            if (required.contains(pos)) continue;
+            if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy && proxy.anchor().equals(worldPosition)) {
+                level.removeBlock(pos, false);
+            }
+            proxyPositions.remove(pos);
+        }
+        int created = 0;
+        for (var pos : required) {
+            if (level.getBlockState(pos).isAir()) {
                 level.setBlock(pos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY.defaultBlockState(), Block.UPDATE_ALL);
-                if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy) {
+                created++;
+            }
+            if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy) {
+                if (!proxy.anchor().equals(worldPosition)) {
                     proxy.setAnchor(worldPosition);
-                    proxyPositions.add(pos.immutable());
                     level.sendBlockUpdated(pos, proxy.getBlockState(), proxy.getBlockState(), Block.UPDATE_CLIENTS);
                 }
+                proxyPositions.add(pos);
             }
         }
     }
@@ -178,6 +223,7 @@ public final class CompositeBlockEntity extends BlockEntity {
     @Override protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.putLong("revision", revision);
+        comparatorOutputs.forEach((id, value) -> output.putInt("comparator." + id, value));
         var list = output.list("parts", PartInstance.CODEC);
         parts.view().forEach(list::add);
     }
@@ -185,16 +231,30 @@ public final class CompositeBlockEntity extends BlockEntity {
     @Override protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         parts.clear();
+        comparatorOutputs.clear();
         revision = Math.max(0, input.getLongOr("revision", 0));
         for (var part : input.listOrEmpty("parts", PartInstance.CODEC)) {
+            if (isInternalPart(part.state())) {
+                NoMoreGap.LOGGER.warn("Ignored invalid composite part {} at {}", part.id(), worldPosition);
+                continue;
+            }
             if (!parts.addLoaded(part)) {
                 NoMoreGap.LOGGER.warn("Ignored excess or duplicate part {} at {}", part.id(), worldPosition);
                 break;
             }
         }
+        for (var part : parts.view()) {
+            int output = input.getIntOr("comparator." + part.id(), 0);
+            if (output != 0) comparatorOutputs.put(part.id(), output);
+        }
         geometryDirty = true;
         geometry.invalidate();
         if (level != null) changed();
+    }
+
+    private static boolean isInternalPart(BlockState state) {
+        return state.getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE
+                || state.getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY;
     }
 
     @Override public Packet<ClientGamePacketListener> getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }

@@ -29,6 +29,12 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
     @Override protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         if (!(world.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy)
                 || !(world.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite)) return Shapes.empty();
+        if (context instanceof net.minecraft.world.phys.shapes.EntityCollisionContext entityContext
+                && entityContext.getEntity() instanceof Player player) {
+            var targeted = fr.xerneas02.nomoregap.interaction.PartRaycaster.targetedShape(composite, world, player, pos);
+            if (targeted.isPresent()) return targeted.get().move(composite.getBlockPos().getX() - pos.getX(),
+                    composite.getBlockPos().getY() - pos.getY(), composite.getBlockPos().getZ() - pos.getZ());
+        }
         return clipToCell(composite.geometry(world, context).selection(), composite.getBlockPos(), pos);
     }
 
@@ -43,7 +49,13 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
                 && world.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite
                 && occupiesCell(composite, world, pos)
                 && world.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock anchorBlock) {
-            return anchorBlock.getDestroyProgress(world.getBlockState(proxy.anchor()), player, world, proxy.anchor());
+            var target = fr.xerneas02.nomoregap.interaction.PartRaycaster.raycastInCell(composite, world, player, 6, pos);
+            if (target.isEmpty()) return 0;
+            var part = composite.parts().find(target.get().partId()).orElse(null);
+            if (part == null) return 0;
+            float hardness = part.state().getDestroySpeed(world, pos);
+            return hardness == -1 ? 0 : player.getDestroySpeed(part.state()) / hardness
+                    / (player.hasCorrectToolForDrops(part.state()) ? 30 : 100);
         }
         return 1;
     }
@@ -57,8 +69,17 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
 
     @Override protected void attack(BlockState state, Level level, BlockPos pos, Player player) {
         if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy
-                && level.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock anchorBlock) {
-            anchorBlock.attack(level.getBlockState(proxy.anchor()), level, proxy.anchor(), player);
+                && level.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite) {
+            fr.xerneas02.nomoregap.interaction.PartRaycaster.raycastInCell(composite, level, player, 6, pos)
+                    .flatMap(hit -> composite.parts().find(hit.partId())).ifPresent(part -> {
+                        var sound = part.state().getSoundType();
+                        var anchor = composite.getBlockPos();
+                        level.playLocalSound(anchor.getX() + 0.5 + part.transform().xDouble(),
+                                anchor.getY() + 0.5 + part.transform().yDouble(),
+                                anchor.getZ() + 0.5 + part.transform().zDouble(), sound.getHitSound(),
+                                net.minecraft.sounds.SoundSource.BLOCKS, (sound.getVolume() + 1) / 4,
+                                sound.getPitch() * 0.5f, false);
+                    });
         }
     }
 
@@ -66,16 +87,24 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
                                         BlockEntity blockEntity, ItemStack tool) {
         if (blockEntity instanceof CompositeProxyBlockEntity proxy
                 && level.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite
-                && level.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock anchorBlock) {
-            anchorBlock.playerDestroy(level, player, proxy.anchor(), level.getBlockState(proxy.anchor()), composite, tool);
+                && level.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock) {
+            fr.xerneas02.nomoregap.interaction.PartRaycaster.raycastInCell(composite, level, player, 6, pos)
+                    .flatMap(hit -> composite.parts().find(hit.partId()))
+                    .ifPresent(part -> CompositeBlock.destroyPart(level, player, proxy.anchor(), composite, part.id(), tool, pos));
         }
     }
 
     @Override protected void spawnDestroyParticles(Level level, Player player, BlockPos pos, BlockState state) {
         if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy
                 && level.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity composite
-                && level.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock anchorBlock) {
-            anchorBlock.spawnDestroyParticles(level, player, proxy.anchor(), level.getBlockState(proxy.anchor()));
+                && level.getBlockState(proxy.anchor()).getBlock() instanceof CompositeBlock) {
+            fr.xerneas02.nomoregap.interaction.PartRaycaster.raycastInCell(composite, level, player, 6, pos)
+                    .flatMap(hit -> composite.parts().find(hit.partId())).ifPresent(part -> {
+                        var particle = new net.minecraft.core.particles.BlockParticleOption(net.minecraft.core.particles.ParticleTypes.BLOCK, part.state());
+                        var random = player.getRandom();
+                        for (int i = 0; i < 12; i++) level.addParticle(particle, pos.getX() + random.nextDouble(),
+                                pos.getY() + random.nextDouble(), pos.getZ() + random.nextDouble(), 0, 0, 0);
+                    });
         }
     }
 

@@ -21,27 +21,46 @@ public final class CompositeInteractionHandler {
     public static void initialize() {
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             var compositePos = hit.getBlockPos();
+            var clickedState = level.getBlockState(compositePos);
+            var clickedDoorTop = clickedState.getBlock() instanceof DoorBlock
+                    && clickedState.getValue(DoorBlock.HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER
+                    ? clickedState : null;
             var composite = level.getBlockEntity(compositePos) instanceof CompositeBlockEntity direct ? direct : null;
             if (composite == null && level.getBlockEntity(compositePos) instanceof fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity proxy
                     && level.getBlockEntity(proxy.anchor()) instanceof CompositeBlockEntity anchor) {
                 compositePos = proxy.anchor();
                 composite = anchor;
             }
-            if (composite == null && level.getBlockState(compositePos).getBlock() instanceof DoorBlock
-                    && level.getBlockState(compositePos).getValue(DoorBlock.HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER
+            if (composite == null && clickedDoorTop != null
                     && level.getBlockEntity(compositePos.below()) instanceof CompositeBlockEntity below) {
                 compositePos = compositePos.below();
                 composite = below;
             }
             if (composite == null || composite.parts().isEmpty()) return InteractionResult.PASS;
             var targetComposite = composite;
-            var target = PartRaycaster.raycast(targetComposite, level, player, 6)
-                    .flatMap(result -> targetComposite.parts().find(result.partId()));
+            var target = clickedDoorTop != null
+                    ? targetComposite.parts().view().stream().filter(part ->
+                            part.state().getBlock() == clickedDoorTop.getBlock()
+                                    && part.state().hasProperty(DoorBlock.HALF)
+                                    && part.state().getValue(DoorBlock.HALF)
+                                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER).findFirst()
+                    : PartRaycaster.raycast(targetComposite, level, player, 6)
+                            .flatMap(result -> targetComposite.parts().find(result.partId()));
             if (target.isEmpty()) return InteractionResult.PASS;
             var part = target.get();
             var state = part.state();
-            if (isDirectlyUsable(state)) {
+            if (state.getBlock() instanceof LeverBlock) {
                 if (level.isClientSide()) return InteractionResult.SUCCESS;
+                boolean powered = !state.getValue(BlockStateProperties.POWERED);
+                composite.replacePart(part.id(), state.setValue(BlockStateProperties.POWERED, powered));
+                level.updateNeighborsAt(compositePos, composite.getBlockState().getBlock());
+                CompositePartUpdater.refreshAround(level, compositePos);
+                level.playSound(null, compositePos, net.minecraft.sounds.SoundEvents.LEVER_CLICK,
+                        net.minecraft.sounds.SoundSource.BLOCKS, .3f, powered ? .6f : .5f);
+                if (powered) fr.xerneas02.nomoregap.advancement.ModAdvancements.checkCompactCircuit(player, composite);
+                return InteractionResult.SUCCESS_SERVER;
+            }
+            if (isDirectlyUsable(state)) {
                 CompositeUseContext.begin(level, compositePos, composite, part.id());
                 try {
                     var partHit = new net.minecraft.world.phys.BlockHitResult(hit.getLocation(), hit.getDirection(), compositePos, hit.isInside());
@@ -50,9 +69,6 @@ public final class CompositeInteractionHandler {
                         return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
                     }
                     var result = state.useWithoutItem(level, player, partHit);
-                    if (result.consumesAction() && state.getBlock() instanceof ButtonBlock button) {
-                        level.scheduleTick(compositePos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE, 20);
-                    }
                     return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
                 } finally {
                     CompositeUseContext.end();
@@ -81,7 +97,7 @@ public final class CompositeInteractionHandler {
 
     private static boolean isDirectlyUsable(net.minecraft.world.level.block.state.BlockState state) {
         var block = state.getBlock();
-        return block instanceof LeverBlock || block instanceof ButtonBlock || block instanceof DaylightDetectorBlock
+        return block instanceof ButtonBlock || block instanceof DaylightDetectorBlock
                 || block instanceof RepeaterBlock || block instanceof ComparatorBlock || block instanceof TntBlock;
     }
 

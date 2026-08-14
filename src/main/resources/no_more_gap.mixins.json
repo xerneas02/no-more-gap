@@ -9,14 +9,19 @@
     "LavaLoggedFluidStateMixin",
     "LavaLoggedNeighborTickMixin",
     "CompositeNeighborStateMixin",
+    "CompositeStairNeighborMixin",
+    "CompositeSupportMixin",
     "CompositeInteractionSetBlockMixin",
-    "BlockNeighborChangedInvoker",
+    "CompositeScheduledTickMixin",
+    "CompositeProxyDestroyMixin",
     "BlockTickInvoker",
     "LavaLoggedDefaultStateMixin",
-    "LavaLoggingReactionMixin",
-    "ItemFrameCompositeSnapMixin",
-    "CompositeWallAttachmentMixin",
-    "WallHangingSignCompositeSupportMixin"
+    "LavaLoggingReactionMixin"
+  ],
+  "client": [
+    "client.CompositeBreakAnimationMixin",
+    "client.CompositeProxyPredictionMixin",
+    "client.CompositeTerrainParticleMixin"
   ],
   "injectors": {
     "defaultRequire": 1

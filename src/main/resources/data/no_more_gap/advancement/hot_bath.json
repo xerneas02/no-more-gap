@@ -1,0 +1,11 @@
+{
+  "parent": "no_more_gap:it_fits",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "description": { "translate": "advancements.no_more_gap.hot_bath.description" },
+    "icon": { "id": "minecraft:lava_bucket" },
+    "title": { "translate": "advancements.no_more_gap.hot_bath.title" }
+  },
+  "requirements": [["done"]],
+  "sends_telemetry_event": false
+}

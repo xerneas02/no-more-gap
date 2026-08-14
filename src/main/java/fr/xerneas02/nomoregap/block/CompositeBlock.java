@@ -48,6 +48,11 @@ public final class CompositeBlock extends BaseEntityBlock {
         if (!(world.getBlockEntity(pos) instanceof CompositeBlockEntity composite) || composite.parts().isEmpty()) {
             return net.minecraft.world.level.block.Blocks.OAK_SLAB.defaultBlockState().getShape(world, pos, context);
         }
+        if (context instanceof net.minecraft.world.phys.shapes.EntityCollisionContext entityContext
+                && entityContext.getEntity() instanceof Player player) {
+            var targeted = PartRaycaster.targetedShape(composite, world, player, null);
+            if (targeted.isPresent()) return targeted.get();
+        }
         return composite.geometry(world, context).selection();
     }
 
@@ -73,6 +78,8 @@ public final class CompositeBlock extends BaseEntityBlock {
     @Override protected int getSignal(BlockState state, BlockGetter world, BlockPos pos, net.minecraft.core.Direction direction) {
         if (world.getBlockEntity(pos) instanceof CompositeBlockEntity composite) {
             return composite.parts().view().stream()
+                    .filter(part -> part.state().getBlock() != this
+                            && part.state().getBlock() != fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY)
                     .mapToInt(part -> part.state().getSignal(world, pos, direction)).max().orElse(0);
         }
         return 0;
@@ -81,9 +88,22 @@ public final class CompositeBlock extends BaseEntityBlock {
     @Override protected int getDirectSignal(BlockState state, BlockGetter world, BlockPos pos, net.minecraft.core.Direction direction) {
         if (world.getBlockEntity(pos) instanceof CompositeBlockEntity composite) {
             return composite.parts().view().stream()
+                    .filter(part -> part.state().getBlock() != this
+                            && part.state().getBlock() != fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY)
                     .mapToInt(part -> part.state().getDirectSignal(world, pos, direction)).max().orElse(0);
         }
         return 0;
+    }
+
+    @Override protected boolean isSignalSource(BlockState state) {
+        return false;
+    }
+
+    @Override protected void neighborChanged(BlockState state, Level level, BlockPos pos,
+                                             Block neighborBlock,
+                                             net.minecraft.world.level.redstone.Orientation orientation,
+                                             boolean movedByPiston) {
+        if (!level.isClientSide()) fr.xerneas02.nomoregap.interaction.CompositePartUpdater.refreshAround(level, pos);
     }
 
     @Override public void onExplosionHit(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos,
@@ -123,8 +143,12 @@ public final class CompositeBlock extends BaseEntityBlock {
                 || composite.parts().isEmpty()) return;
         var target = targetedPart(composite, level, player);
         if (target.isEmpty()) return;
-        var sound = target.get().state().getSoundType();
-        player.playSound(sound.getHitSound(), (sound.getVolume() + 1) / 4, sound.getPitch() * 0.5f);
+        var part = target.get();
+        var sound = part.state().getSoundType();
+        level.playLocalSound(pos.getX() + 0.5 + part.transform().xDouble(),
+                pos.getY() + 0.5 + part.transform().yDouble(), pos.getZ() + 0.5 + part.transform().zDouble(),
+                sound.getHitSound(), SoundSource.BLOCKS, (sound.getVolume() + 1) / 4,
+                sound.getPitch() * 0.5f, false);
     }
 
     @Override protected void spawnDestroyParticles(Level level, Player player, BlockPos pos, BlockState state) {
@@ -134,9 +158,11 @@ public final class CompositeBlock extends BaseEntityBlock {
         var base = target.get().state();
         var particle = new BlockParticleOption(ParticleTypes.BLOCK, base);
         var random = player.getRandom();
+        var transform = target.get().transform();
         for (int i = 0; i < 12; i++) {
-            level.addParticle(particle, pos.getX() + random.nextDouble(), pos.getY() + random.nextDouble() * 0.5,
-                    pos.getZ() + random.nextDouble(), 0, 0, 0);
+            level.addParticle(particle, pos.getX() + transform.xDouble() + random.nextDouble(),
+                    pos.getY() + transform.yDouble() + random.nextDouble() * 0.5,
+                    pos.getZ() + transform.zDouble() + random.nextDouble(), 0, 0, 0);
         }
     }
 
@@ -155,9 +181,9 @@ public final class CompositeBlock extends BaseEntityBlock {
     @Override protected void tick(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos, RandomSource random) {
         if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)) return;
         composite.refreshProxies();
-        for (var part : java.util.List.copyOf(composite.parts().view())) {
-            if (part.state().getBlock() instanceof net.minecraft.world.level.block.ButtonBlock
-                    && part.state().getValue(BlockStateProperties.POWERED)) {
+        for (var id : composite.takeScheduledParts(level.getGameTime())) {
+            var part = composite.parts().find(id).orElse(null);
+            if (part != null && part.state().getBlock() instanceof net.minecraft.world.level.block.ButtonBlock) {
                 CompositeUseContext.run(level, pos, composite, part.id(), () ->
                         ((BlockTickInvoker) part.state().getBlock()).noMoreGap$tick(part.state(), level, pos, random));
             }
@@ -170,30 +196,51 @@ public final class CompositeBlock extends BaseEntityBlock {
         player.causeFoodExhaustion(0.005f);
         if (!(level instanceof net.minecraft.server.level.ServerLevel server)
                 || !(blockEntity instanceof CompositeBlockEntity composite)) return;
-        composite.clearProxies();
-        if (!composite.parts().isEmpty()) {
-            var target = targetedPart(composite, level, player);
-            if (target.isEmpty()) return;
-            var targetPart = target.get();
-            var sound = targetPart.state().getSoundType();
-            level.playSound(null, pos, sound.getBreakSound(), SoundSource.BLOCKS,
-                    (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
-            if (targetPart.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock) {
-                var doorParts = composite.parts().view().stream()
-                        .filter(part -> part.state().getBlock() == targetPart.state().getBlock()).toList();
-                var lower = doorParts.stream().filter(part -> part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
-                        == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER).findFirst().orElse(targetPart);
-                if (player.hasCorrectToolForDrops(lower.state())) {
-                    Block.dropResources(lower.state(), server, pos, null, player, tool);
-                }
-                restoreAfterRemoval(level, pos, composite, doorParts.stream().map(PartInstance::id).collect(java.util.stream.Collectors.toSet()));
-                return;
+        targetedPart(composite, level, player).ifPresent(part -> destroyPart(level, player, pos, composite, part.id(), tool, null));
+    }
+
+    /** Shared by the anchor and its proxy cells, so both destroy the exact same selected part. */
+    public static void destroyPart(Level level, Player player, BlockPos pos, CompositeBlockEntity composite, int partId,
+                                   ItemStack tool) {
+        destroyPart(level, player, pos, composite, partId, tool, null);
+    }
+
+    public static void destroyPart(Level level, Player player, BlockPos pos, CompositeBlockEntity composite, int partId,
+                                   ItemStack tool, BlockPos minedProxy) {
+        if (!(level instanceof net.minecraft.server.level.ServerLevel server)) return;
+        var targetPart = composite.parts().find(partId).orElse(null);
+        if (targetPart == null) return;
+        composite.clearProxiesExcept(minedProxy);
+        var sound = targetPart.state().getSoundType();
+        level.playSound(null, pos.getX() + 0.5 + targetPart.transform().xDouble(),
+                pos.getY() + 0.5 + targetPart.transform().yDouble(),
+                pos.getZ() + 0.5 + targetPart.transform().zDouble(), sound.getBreakSound(), SoundSource.BLOCKS,
+                (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+        var directlyRemoved = targetPart.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                ? composite.parts().view().stream().filter(part -> part.state().getBlock() == targetPart.state().getBlock())
+                .map(PartInstance::id).collect(java.util.stream.Collectors.toSet())
+                : java.util.Set.of(targetPart.id());
+        var removed = targetPart.id() == sourcePartId(composite.parts().view())
+                ? composite.parts().view().stream().map(PartInstance::id).collect(java.util.stream.Collectors.toSet())
+                : new java.util.HashSet<>(directlyRemoved);
+        if (isFootCover(targetPart)) {
+            for (boolean changed = true; changed;) {
+                changed = composite.parts().view().stream()
+                        .filter(part -> !removed.contains(part.id()))
+                        .filter(part -> removed.stream().map(composite.parts()::find).flatMap(java.util.Optional::stream)
+                                .anyMatch(support -> restsOn(level, pos, part, support)))
+                        .anyMatch(part -> removed.add(part.id()));
             }
-            if (player.hasCorrectToolForDrops(targetPart.state())) {
-                Block.dropResources(targetPart.state(), server, pos, null, player, tool);
-            }
-            restoreAfterRemoval(level, pos, composite, targetPart.id());
         }
+        for (var part : composite.parts().view()) {
+            if (!removed.contains(part.id()) || (part.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    && part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER)) continue;
+            if (!player.preventsBlockDrops() && player.hasCorrectToolForDrops(part.state())) {
+                Block.dropResources(part.state(), server, partPos(pos, part), null, player, tool);
+            }
+        }
+        restoreAfterRemoval(level, pos, composite, removed, minedProxy);
     }
 
     public static void restoreAfterRemoval(Level level, BlockPos pos, CompositeBlockEntity composite, int removedId) {
@@ -201,7 +248,12 @@ public final class CompositeBlock extends BaseEntityBlock {
     }
 
     public static void restoreAfterRemoval(Level level, BlockPos pos, CompositeBlockEntity composite, java.util.Set<Integer> removedIds) {
-        composite.clearProxies();
+        restoreAfterRemoval(level, pos, composite, removedIds, null);
+    }
+
+    private static void restoreAfterRemoval(Level level, BlockPos pos, CompositeBlockEntity composite,
+                                            java.util.Set<Integer> removedIds, BlockPos minedProxy) {
+        composite.clearProxiesExcept(minedProxy);
         var remaining = composite.parts().view().stream()
                 .filter(part -> !removedIds.contains(part.id()))
                 .filter(part -> part.state().getBlock() != fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE
@@ -214,15 +266,28 @@ public final class CompositeBlock extends BaseEntityBlock {
             var candidate = level.getBlockState(pos.above());
             if (candidate.getBlock() instanceof net.minecraft.world.level.block.DoorBlock) doorTop = candidate;
         }
-        if (remaining.size() == 1 && isWholeCellPart(remaining.getFirst())) {
+        if (isWholeDoorPair(remaining)) {
+            var lower = remaining.stream().filter(part -> part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER).findFirst().orElseThrow();
+            var upper = remaining.stream().filter(part -> part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER).findFirst().orElseThrow();
+            level.setBlock(pos, lower.state(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+            level.setBlock(pos.above(), upper.state(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+            level.updateNeighborsAt(pos, lower.state().getBlock());
+            level.updateNeighborsAt(pos.above(), upper.state().getBlock());
+        } else if (remaining.size() == 1 && isWholeCellPart(remaining.getFirst())
+                && !(remaining.getFirst().state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock)) {
             var part = remaining.getFirst();
             var transform = part.transform();
             var targetPos = pos.offset(transform.x().units() / fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK,
                     transform.y().units() / fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK,
                     transform.z().units() / fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK);
-            if (targetPos.equals(pos) || level.getBlockState(targetPos).isAir()) {
-                level.setBlock(targetPos, part.state(), Block.UPDATE_ALL);
-                if (!targetPos.equals(pos)) level.removeBlock(pos, false);
+            // A remaining part in a proxy cell must stay composite until the clicked proxy has been removed.
+            if (targetPos.equals(pos)) {
+                int flags = part.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                        ? Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS
+                        : Block.UPDATE_ALL;
+                level.setBlock(targetPos, part.state(), flags);
             } else {
                 composite.replaceParts(remaining);
             }
@@ -232,7 +297,51 @@ public final class CompositeBlock extends BaseEntityBlock {
             level.removeBlock(pos, false);
         }
         if (doorTop != null) level.setBlock(pos.above(), doorTop, Block.UPDATE_CLIENTS);
-        if (!remaining.isEmpty()) level.scheduleTick(pos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE, 1);
+        if (!remaining.isEmpty()) {
+            level.updateNeighborsAt(pos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE);
+            level.scheduleTick(pos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE, 1);
+        }
+    }
+
+    private static BlockPos partPos(BlockPos anchor, PartInstance part) {
+        return anchor.offset((int) Math.floor(part.transform().xDouble()), (int) Math.floor(part.transform().yDouble()),
+                (int) Math.floor(part.transform().zDouble()));
+    }
+
+    static int sourcePartId(java.util.List<PartInstance> parts) {
+        return parts.stream().filter(part -> !isFootCover(part))
+                .findFirst().orElse(parts.getFirst()).id();
+    }
+
+    private static boolean isFootCover(PartInstance part) {
+        return part.state().getBlock() instanceof net.minecraft.world.level.block.SnowLayerBlock
+                || part.state().getBlock() instanceof net.minecraft.world.level.block.CarpetBlock
+                || part.state().getBlock() instanceof net.minecraft.world.level.block.MossyCarpetBlock;
+    }
+
+    static boolean restsOn(BlockGetter level, BlockPos pos, PartInstance part, PartInstance support) {
+        for (var upper : fr.xerneas02.nomoregap.geometry.ShapeTransformer.transform(
+                part.state().getShape(level, pos, CollisionContext.empty()), part.transform()).toAabbs()) {
+            for (var lower : fr.xerneas02.nomoregap.geometry.ShapeTransformer.transform(
+                    support.state().getShape(level, pos, CollisionContext.empty()), support.transform()).toAabbs()) {
+                if (Math.abs(upper.minY - lower.maxY) < 1.0e-7
+                        && Math.min(upper.maxX, lower.maxX) > Math.max(upper.minX, lower.minX)
+                        && Math.min(upper.maxZ, lower.maxZ) > Math.max(upper.minZ, lower.minZ)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isWholeDoorPair(java.util.List<PartInstance> parts) {
+        if (parts.size() != 2 || !(parts.getFirst().state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
+                || parts.getFirst().state().getBlock() != parts.getLast().state().getBlock()) return false;
+        int unit = fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
+        return parts.stream().anyMatch(part -> part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                && part.transform().x().units() == 0 && part.transform().y().units() == 0 && part.transform().z().units() == 0)
+                && parts.stream().anyMatch(part -> part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER
+                && part.transform().x().units() == 0 && part.transform().y().units() == unit && part.transform().z().units() == 0);
     }
 
     private static java.util.Optional<PartInstance> targetedPart(CompositeBlockEntity composite, BlockGetter world, Player player) {

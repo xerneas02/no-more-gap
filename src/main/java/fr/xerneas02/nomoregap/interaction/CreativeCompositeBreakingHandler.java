@@ -21,10 +21,14 @@ public final class CreativeCompositeBreakingHandler {
             }
             if (composite == null || composite.parts().size() < 2) return InteractionResult.PASS;
             var targetComposite = composite;
-            var target = PartRaycaster.raycast(targetComposite, level, player, 6)
+            var target = (anchorPos.equals(pos) ? PartRaycaster.raycast(targetComposite, level, player, 6)
+                    : PartRaycaster.raycastInCell(targetComposite, level, player, 6, pos))
                     .flatMap(hit -> targetComposite.parts().find(hit.partId()));
             if (target.isEmpty()) return InteractionResult.PASS;
             if (level.isClientSide()) return InteractionResult.SUCCESS;
+            var sound = target.get().state().getSoundType();
+            level.playSound(null, anchorPos, sound.getBreakSound(), net.minecraft.sounds.SoundSource.BLOCKS,
+                    (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
             if (target.get().state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock) {
                 var doorParts = targetComposite.parts().view().stream()
                         .filter(part -> part.state().getBlock() == target.get().state().getBlock())

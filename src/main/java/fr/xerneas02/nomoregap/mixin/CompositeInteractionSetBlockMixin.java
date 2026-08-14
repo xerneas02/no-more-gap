@@ -3,11 +3,13 @@ package fr.xerneas02.nomoregap.mixin;
 import fr.xerneas02.nomoregap.interaction.CompositeUseContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Level.class)
 abstract class CompositeInteractionSetBlockMixin {
@@ -16,4 +18,5 @@ abstract class CompositeInteractionSetBlockMixin {
                                              CallbackInfoReturnable<Boolean> callback) {
         if (CompositeUseContext.handleSetBlock((Level) (Object) this, pos, state)) callback.setReturnValue(true);
     }
+
 }

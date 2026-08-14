@@ -1,0 +1,11 @@
+{
+  "parent": "no_more_gap:it_fits",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "description": { "translate": "advancements.no_more_gap.compact_circuit.description" },
+    "icon": { "id": "minecraft:redstone_lamp" },
+    "title": { "translate": "advancements.no_more_gap.compact_circuit.title" }
+  },
+  "requirements": [["done"]],
+  "sends_telemetry_event": false
+}

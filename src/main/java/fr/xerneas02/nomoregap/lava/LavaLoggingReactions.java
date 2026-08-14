@@ -82,6 +82,8 @@ public final class LavaLoggingReactions {
         if (level.getBlockEntity(pos) instanceof CompositeBlockEntity composite) {
             composite.addPart(original, LocalTransform.IDENTITY, 0);
             composite.addPart(Blocks.OBSIDIAN.defaultBlockState(), LocalTransform.IDENTITY, FORMED_ROCK);
+            var player = level.getNearestPlayer(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 8, false);
+            if (player != null) fr.xerneas02.nomoregap.advancement.ModAdvancements.grant(player, "obsidian_log");
         }
     }
 }

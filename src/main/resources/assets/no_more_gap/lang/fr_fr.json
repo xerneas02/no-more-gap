@@ -1,3 +1,19 @@
 {
-  "block.no_more_gap.composite": "Bloc composite"
+  "block.no_more_gap.composite": "Bloc composite",
+  "advancements.no_more_gap.it_fits.title": "Ça rentre !",
+  "advancements.no_more_gap.it_fits.description": "Deux blocs, une seule case.",
+  "advancements.no_more_gap.at_the_blocks_feet.title": "Au pied du bloc",
+  "advancements.no_more_gap.at_the_blocks_feet.description": "La moquette trouve toujours sa place.",
+  "advancements.no_more_gap.carpet_diem.title": "Carpet Diem",
+  "advancements.no_more_gap.carpet_diem.description": "Une pièce entièrement moquettée, verticalement.",
+  "advancements.no_more_gap.hot_bath.title": "Un bain bien chaud",
+  "advancements.no_more_gap.hot_bath.description": "Le waterlogging, avec davantage de conséquences.",
+  "advancements.no_more_gap.obsidian_log.title": "Obsidian Log",
+  "advancements.no_more_gap.obsidian_log.description": "Transformez le lava logging en obsidian logging.",
+  "advancements.no_more_gap.compact_circuit.title": "Court-circuit immobilier",
+  "advancements.no_more_gap.compact_circuit.description": "Le levier et la lampe partagent déjà le loyer.",
+  "advancements.no_more_gap.open_to_everything.title": "Porte ouverte à tout",
+  "advancements.no_more_gap.open_to_everything.description": "Même la moquette passe sous la porte.",
+  "advancements.no_more_gap.stack_of_a_stack.title": "Une pile de piles",
+  "advancements.no_more_gap.stack_of_a_stack.description": "64 blocs. Une seule case. Aucune question."
 }

@@ -44,16 +44,21 @@ public final class CompositePlacementHandler {
             }
             var originalPos = effectiveHit.getBlockPos();
             var original = level.getBlockState(originalPos);
-            if (held.getItem() instanceof BlockItem blockItem && original.getFluidState().is( net.minecraft.world.level.material.Fluids.LAVA)) {
-                var placed = blockItem.getBlock().getStateForPlacement(new BlockPlaceContext(player, hand, held, effectiveHit));
-                if (placed != null && canLavaLog(placed)) {
-                    if (level.isClientSide()) return InteractionResult.SUCCESS;
-                    level.setBlock(originalPos, placed.setValue(LavaLogging.LAVA_LOGGED, true), Block.UPDATE_ALL);
-                    if (!player.isCreative()) held.shrink(1);
-                    var sound = placed.getSoundType();
-                    level.playSound(null, originalPos, sound.getPlaceSound(), SoundSource.BLOCKS,
-                            (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
-                    return InteractionResult.SUCCESS_SERVER;
+            if (held.getItem() instanceof BlockItem blockItem) {
+                var placement = new BlockPlaceContext(player, hand, held, effectiveHit);
+                var placementPos = placement.getClickedPos();
+                if (level.getFluidState(placementPos).isSourceOfType(net.minecraft.world.level.material.Fluids.LAVA)) {
+                    var placed = blockItem.getBlock().getStateForPlacement(placement);
+                    if (placed != null && canLavaLog(placed)) {
+                        if (level.isClientSide()) return InteractionResult.SUCCESS;
+                        level.setBlock(placementPos, placed.setValue(LavaLogging.LAVA_LOGGED, true), Block.UPDATE_ALL);
+                        if (!player.isCreative()) held.shrink(1);
+                        var sound = placed.getSoundType();
+                        level.playSound(null, placementPos, sound.getPlaceSound(), SoundSource.BLOCKS,
+                                (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+                        fr.xerneas02.nomoregap.advancement.ModAdvancements.grant(player, "hot_bath");
+                        return InteractionResult.SUCCESS_SERVER;
+                    }
                 }
             }
             var compositeResult = useFluidBucketOnCompositePart(player, level, hand, originalPos, held);
@@ -105,8 +110,12 @@ public final class CompositePlacementHandler {
                     || original.getBlock() == ModBlocks.COMPOSITE_PROXY) {
                 return InteractionResult.PASS;
             }
-            var block = ((BlockItem) held.getItem()).getBlock();
-            if (block instanceof EntityBlock) return InteractionResult.PASS;
+            if (!(held.getItem() instanceof BlockItem blockItem)) return InteractionResult.PASS;
+            var block = blockItem.getBlock();
+            if (block instanceof EntityBlock || isUnsupportedRedstone(block)) return InteractionResult.PASS;
+            if (Block.isShapeFullBlock(original.getCollisionShape(level, originalPos, CollisionContext.of(player)))) {
+                return InteractionResult.PASS;
+            }
             var placed = block.getStateForPlacement(new BlockPlaceContext(player, hand, held, effectiveHit));
             if (placed == null) {
                 placed = block.defaultBlockState();
@@ -130,8 +139,10 @@ public final class CompositePlacementHandler {
             }
             int addedParts = 1 + (existingComposite == null ? 1 : 0)
                     + (placed.getBlock() instanceof net.minecraft.world.level.block.DoorBlock ? 1 : 0);
-            if ((existingComposite == null ? 0 : existingComposite.parts().size()) + addedParts
-                    > fr.xerneas02.nomoregap.util.NoMoreGapLimits.MAX_PARTS_PER_CELL) {
+            int maxParts = level instanceof net.minecraft.server.level.ServerLevel server
+                    ? server.getGameRules().get(fr.xerneas02.nomoregap.rule.CompositeRules.MAX_PARTS)
+                    : fr.xerneas02.nomoregap.util.NoMoreGapLimits.MAX_PARTS_PER_CELL;
+            if ((existingComposite == null ? 0 : existingComposite.parts().size()) + addedParts > maxParts) {
                 return InteractionResult.FAIL;
             }
             if (level.isClientSide()) return InteractionResult.SUCCESS;
@@ -162,11 +173,15 @@ public final class CompositePlacementHandler {
             } finally {
                 composite.endUpdate();
             }
+            level.updateNeighborsAt(originalPos, ModBlocks.COMPOSITE);
             CompositePartUpdater.refreshAround(level, originalPos);
             if (!player.isCreative()) held.shrink(1);
             var sound = placed.getSoundType();
-            level.playSound(null, originalPos, sound.getPlaceSound(), SoundSource.BLOCKS,
+            level.playSound(null, originalPos.getX() + 0.5 + transform.xDouble(),
+                    originalPos.getY() + 0.5 + transform.yDouble(), originalPos.getZ() + 0.5 + transform.zDouble(),
+                    sound.getPlaceSound(), SoundSource.BLOCKS,
                     (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+            fr.xerneas02.nomoregap.advancement.ModAdvancements.checkComposite(player, composite);
             return InteractionResult.SUCCESS_SERVER;
         });
     }
@@ -176,6 +191,12 @@ public final class CompositePlacementHandler {
                 && !(blockItem.getBlock() instanceof CompositeBlock)
                 && !state.isAir()
                 && state.getFluidState().isEmpty();
+    }
+
+    private static boolean isUnsupportedRedstone(Block block) {
+        return block instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                || block instanceof net.minecraft.world.level.block.RepeaterBlock
+                || block instanceof net.minecraft.world.level.block.ComparatorBlock;
     }
 
     private static CoverTarget footCoverTarget(net.minecraft.world.level.Level level, net.minecraft.world.phys.BlockHitResult hit,
@@ -217,19 +238,25 @@ public final class CompositePlacementHandler {
             level.setBlock(pos, original, Block.UPDATE_ALL);
             return InteractionResult.FAIL;
         }
+        if (doorTop != null) level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(),
+                Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
         composite.beginUpdate();
         try {
             composite.addPart(original, LocalTransform.IDENTITY, 0);
             composite.addPart(((BlockItem) item).getBlock().defaultBlockState(), LocalTransform.IDENTITY, 0);
+            if (doorTop != null) composite.addPart(doorTop,
+                    new LocalTransform(FixedPoint.ZERO, FixedPoint.FULL_BLOCK, FixedPoint.ZERO, 0), 0);
         } finally {
             composite.endUpdate();
         }
+        level.updateNeighborsAt(pos, ModBlocks.COMPOSITE);
         CompositePartUpdater.refreshAround(level, pos);
-        if (doorTop != null) level.setBlock(pos.above(), doorTop, Block.UPDATE_CLIENTS);
         if (!player.isCreative()) player.getItemInHand(hand).shrink(1);
         var sound = ((BlockItem) item).getBlock().defaultBlockState().getSoundType();
         level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS,
                 (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+        fr.xerneas02.nomoregap.advancement.ModAdvancements.grant(player, "at_the_blocks_feet");
+        fr.xerneas02.nomoregap.advancement.ModAdvancements.checkComposite(player, composite);
         return InteractionResult.SUCCESS_SERVER;
     }
 

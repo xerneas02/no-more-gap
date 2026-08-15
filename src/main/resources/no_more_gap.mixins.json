@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "DoorBlockMixin",
+    "DoublePlantBlockMixin",
     "PlantSupportMixin",
     "WaterloggedStateDefinitionMixin",
     "LavaLoggedFluidStateMixin",
@@ -20,6 +21,7 @@
   ],
   "client": [
     "client.CompositeBreakAnimationMixin",
+    "client.CompositeBreakProgressMixin",
     "client.CompositeProxyPredictionMixin",
     "client.CompositeTerrainParticleMixin"
   ],

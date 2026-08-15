@@ -1,0 +1,137 @@
+plugins {
+    id 'fabric-loom' version "${loom_version}"
+}
+
+version = "${mod_version}+mc${minecraft_version}"
+group = maven_group
+base.archivesName = archives_base_name
+
+loom {
+    splitEnvironmentSourceSets()
+    mods {
+        no_more_gap {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    inputs.properties version: version, minecraft_version: minecraft_version,
+            fabric_api_version: fabric_api_version, java_version: java_version
+    filesMatching('fabric.mod.json') {
+        expand version: version, minecraft_version: minecraft_version,
+                fabric_api_version: fabric_api_version, java_version: java_version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = Integer.parseInt(java_version)
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+if (minecraft_version != '1.21.11') {
+    sourceSets.main.java.srcDir 'src/legacy/java'
+    sourceSets.main.java.exclude { details ->
+        details.file.path.contains('src\\main\\java') && details.file.path.replace('\\', '/').matches(
+                '.*/(NoMoreGap|CompositeRules|LavaLoggingRules)\\.java')
+    }
+}
+
+if (!(minecraft_version in ['1.21.9', '1.21.10', '1.21.11'])) {
+    sourceSets.client.java.srcDir 'src/legacyClient/java'
+    sourceSets.client.java.exclude { details ->
+        details.file.path.contains('src\\client\\java')
+                && details.file.name == 'CompositeBlockEntityRenderer.java'
+    }
+}
+
+if (minecraft_version == '1.21.5') {
+    sourceSets.main.java.srcDir 'src/legacyNbt/java'
+    sourceSets.main.java.exclude { details ->
+        details.file.path.contains('src\\main\\java\\fr\\xerneas02\\nomoregap\\block\\entity')
+                && details.file.name in ['CompositeBlockEntity.java', 'CompositeProxyBlockEntity.java']
+    }
+}
+
+if (minecraft_version in ['1.21.2', '1.21.3', '1.21.4']) {
+    sourceSets.main.java.srcDir 'src/legacyNbtOld/java'
+    sourceSets.main.java.exclude { details ->
+        details.file.path.contains('src\\main\\java\\fr\\xerneas02\\nomoregap\\block\\entity')
+                && details.file.name in ['CompositeBlockEntity.java', 'CompositeProxyBlockEntity.java']
+    }
+}
+
+if (minecraft_version in ['1.21', '1.21.1']) {
+    sourceSets.main.java.srcDir 'src/legacyNbtVeryOld/java'
+    sourceSets.main.java.exclude { details ->
+        details.file.path.contains('src\\main\\java\\fr\\xerneas02\\nomoregap\\block\\entity')
+                && details.file.name in ['CompositeBlockEntity.java', 'CompositeProxyBlockEntity.java']
+    }
+}
+
+if (minecraft_version in ['1.21', '1.21.1']) {
+    sourceSets.main.java.srcDir 'src/legacyOld/java'
+    sourceSets.main.java.exclude { details ->
+        details.file.path.contains('src\\main\\java') && (
+                details.file.name in ['ModBlocks.java', 'ModItems.java', 'CompositeBlock.java',
+                        'CompositePartUpdater.java', 'SnowyVegetationFeature.java', 'CompositeNeighborStateMixin.java',
+                        'CompositeScheduledTickMixin.java', 'DoorBlockMixin.java', 'LavaLoggedNeighborTickMixin.java',
+                        'PlantSupportMixin.java', 'LavaLoggingReactionMixin.java'])
+    }
+    sourceSets.main.resources.srcDir 'src/legacyOld/resources'
+    sourceSets.main.resources.exclude { details ->
+        details.file.path.contains('src\\main\\resources') && details.file.name == 'no_more_gap.mixins.json'
+    }
+}
+
+def minecraft121Versions = [
+        '1.21'   : '0.102.0+1.21',
+        '1.21.1' : '0.116.15+1.21.1',
+        '1.21.2' : '0.106.1+1.21.2',
+        '1.21.3' : '0.114.1+1.21.3',
+        '1.21.4' : '0.119.4+1.21.4',
+        '1.21.5' : '0.128.2+1.21.5',
+        '1.21.6' : '0.128.2+1.21.6',
+        '1.21.7' : '0.129.0+1.21.7',
+        '1.21.8' : '0.136.1+1.21.8',
+        '1.21.9' : '0.134.1+1.21.9',
+        '1.21.10': '0.138.4+1.21.10',
+        '1.21.11': '0.141.6+1.21.11'
+]
+
+def minecraft121Builds = minecraft121Versions.collect { gameVersion, apiVersion ->
+    tasks.register("buildMinecraft${gameVersion.replace('.', '_')}", Exec) {
+        group = 'build'
+        workingDir projectDir
+        commandLine file('../../gradlew.bat'), 'build',
+                "-Pminecraft_version=${gameVersion}", "-Pfabric_api_version=${apiVersion}",
+                "-Parchives_base_name=no-more-gap-${gameVersion}", '--console=plain'
+    }
+}
+minecraft121Builds.drop(1).eachWithIndex { task, index ->
+    task.configure { mustRunAfter minecraft121Builds[index] }
+}
+tasks.register('buildAllMinecraft121') {
+    group = 'build'
+    description = 'Builds No More Gap for Minecraft 1.21 through 1.21.11.'
+    dependsOn minecraft121Builds
+}

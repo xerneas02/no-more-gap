@@ -33,7 +33,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
     @Override public boolean shouldRenderOffScreen() { return true; }
     @Override public boolean shouldRender(CompositeBlockEntity entity, Vec3 camera) {
         if (!entity.getBlockPos().equals(breakingAnchor)
-                && entity.parts().view().stream().allMatch(CompositeChunkModel::isChunkRendered)) return false;
+                && entity.parts().view().stream().allMatch(part -> isRenderedInChunk(entity, part))) return false;
         int distance = NoMoreGapConfig.renderDistanceBlocks(
                 net.minecraft.client.Minecraft.getInstance().options.renderDistance().get());
         return Vec3.atCenterOf(entity.getBlockPos()).closerThan(camera, distance);
@@ -54,7 +54,10 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                 break;
             }
         }
-        for (int i = 0; i < state.count; i++) state.lights[i] = state.lightCoords;
+        for (int i = 0; i < state.count; i++) {
+            state.lights[i] = state.lightCoords;
+            state.yScale[i] = verticalScale(entity, state.parts[i]);
+        }
     }
 
     private void rebuild(CompositeBlockEntity entity, State state) {
@@ -66,6 +69,7 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
             int i = state.count++;
             state.partIds[i] = part.id();
             state.parts[i] = part;
+            state.chunkRendered[i] = isRenderedInChunk(entity, part);
             state.blockStates[i] = part.state();
             resolver.update(state.models[i], part.state(), displayContext);
             state.breakModels[i] = net.minecraft.client.Minecraft.getInstance().getModelManager()
@@ -100,13 +104,14 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
                     && !camera.cullFrustum.isVisible(state.partBounds[i])) continue;
             pose.pushPose();
             pose.translate(state.x[i], state.y[i], state.z[i]);
+            pose.scale(1, state.yScale[i], 1);
             if (state.formedRock[i]) {
                 pose.translate(0.5, 0.5, 0.5);
                 pose.scale(0.996f, 0.996f, 0.996f);
                 pose.translate(-0.5, -0.5, -0.5);
             }
             pose.rotateAround(Axis.YP.rotationDegrees(state.rotation[i]), 0.5f, 0, 0.5f);
-            if (!CompositeChunkModel.isChunkRendered(state.parts[i])) {
+            if (!state.chunkRendered[i]) {
                 state.models[i].submit(pose, collector, state.lights[i], OverlayTexture.NO_OVERLAY, 0);
             }
             if (i == state.breakingIndex && state.breakingStage >= 0) {
@@ -121,16 +126,56 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         try {
             for (var method : collector.getClass().getMethods()) {
                 if (!method.getName().equals("submitBreakingBlockModel")) continue;
-                if (method.getParameterCount() == 4) {
+                var parameterTypes = method.getParameterTypes();
+                if (parameterTypes.length == 4 && parameterTypes[1].isInstance(model)) {
                     method.invoke(collector, pose, model, pos, stage);
                     return;
                 }
+                if (parameterTypes.length != 3 || !java.util.List.class.isAssignableFrom(parameterTypes[1])) continue;
                 var parts = new java.util.ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
                 model.collectParts(net.minecraft.util.RandomSource.create(pos), parts);
                 method.invoke(collector, pose, parts, stage);
                 return;
             }
-        } catch (ReflectiveOperationException ignored) {}
+        } catch (ReflectiveOperationException | IllegalArgumentException ignored) {}
+    }
+
+    private static boolean isRenderedInChunk(CompositeBlockEntity entity,
+                                             fr.xerneas02.nomoregap.part.PartInstance part) {
+        if (!CompositeChunkModel.isChunkRendered(part) || entity.getLevel() == null) return false;
+        int unit = NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
+        var owner = entity.getBlockPos().offset(
+                Math.floorDiv(part.transform().x().units(), unit),
+                Math.floorDiv(part.transform().y().units(), unit),
+                Math.floorDiv(part.transform().z().units(), unit));
+        var ownerEntity = entity.getLevel().getBlockEntity(owner);
+        return ownerEntity == entity
+                || ownerEntity instanceof fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity proxy
+                && proxy.anchor().equals(entity.getBlockPos());
+    }
+
+    private static float verticalScale(CompositeBlockEntity entity,
+                                       fr.xerneas02.nomoregap.part.PartInstance part) {
+        if (entity.getLevel() == null
+                || !(part.state().getBlock() instanceof net.minecraft.world.level.block.FenceBlock
+                || part.state().getBlock() instanceof net.minecraft.world.level.block.WallBlock)) return 1;
+        var above = entity.getBlockPos().above();
+        var slab = entity.getLevel().getBlockState(above);
+        boolean topSlab = isTopSlab(slab)
+                || entity.getLevel().getBlockEntity(above) instanceof CompositeBlockEntity composite
+                && composite.parts().view().stream().anyMatch(candidate -> isTopSlab(candidate.state()));
+        if (!topSlab) return 1;
+        var shape = part.state().getShape(entity.getLevel(), entity.getBlockPos(),
+                net.minecraft.world.phys.shapes.CollisionContext.empty());
+        if (shape.isEmpty()) return 1;
+        double available = 1.5 - part.transform().yDouble() - 1.0 / NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
+        return (float) Math.clamp(available / shape.bounds().maxY, 0, 1);
+    }
+
+    private static boolean isTopSlab(net.minecraft.world.level.block.state.BlockState state) {
+        return state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock
+                && state.getValue(net.minecraft.world.level.block.SlabBlock.TYPE)
+                == net.minecraft.world.level.block.state.properties.SlabType.TOP;
     }
 
     public static final class State extends BlockEntityRenderState {
@@ -143,9 +188,11 @@ public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<C
         private final double[] x = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] y = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] z = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final float[] yScale = new float[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] rotation = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] lights = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final boolean[] formedRock = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final boolean[] chunkRendered = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private AABB bounds;
         private long revision = Long.MIN_VALUE;
         private int count;

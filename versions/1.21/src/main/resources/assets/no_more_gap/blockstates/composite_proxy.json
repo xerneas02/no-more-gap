@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "no_more_gap:block/composite_proxy" }
+  }
+}

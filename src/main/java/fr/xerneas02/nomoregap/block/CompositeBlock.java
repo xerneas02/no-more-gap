@@ -239,8 +239,17 @@ public final class CompositeBlock extends BaseEntityBlock {
             if (!removed.contains(part.id()) || (part.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                     && part.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF)
                     == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER)) continue;
-            if (!player.preventsBlockDrops() && player.hasCorrectToolForDrops(part.state())) {
+            if (!player.preventsBlockDrops()) {
                 Block.dropResources(part.state(), server, partPos(pos, part), null, player, tool);
+            }
+        }
+        for (var part : composite.parts().view()) {
+            if (removed.contains(part.id())
+                    && part.state().getBlock() instanceof net.minecraft.world.level.block.DoublePlantBlock
+                    && part.state().getValue(net.minecraft.world.level.block.DoublePlantBlock.HALF)
+                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+                level.setBlock(partPos(pos, part).above(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
+                        Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
             }
         }
         restoreAfterRemoval(level, pos, composite, removed, minedProxy);

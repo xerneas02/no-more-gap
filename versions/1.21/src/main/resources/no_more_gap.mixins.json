@@ -1,0 +1,32 @@
+{
+  "required": true,
+  "package": "fr.xerneas02.nomoregap.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "DoorBlockMixin",
+    "DoublePlantBlockMixin",
+    "PlantSupportMixin",
+    "WaterloggedStateDefinitionMixin",
+    "LavaLoggedFluidStateMixin",
+    "LavaLoggedWallShapeMixin",
+    "LavaLoggedNeighborTickMixin",
+    "CompositeNeighborStateMixin",
+    "CompositeStairNeighborMixin",
+    "CompositeSupportMixin",
+    "CompositeInteractionSetBlockMixin",
+    "CompositeScheduledTickMixin",
+    "CompositeProxyDestroyMixin",
+    "BlockTickInvoker",
+    "LavaLoggedDefaultStateMixin",
+    "LavaLoggingReactionMixin"
+  ],
+  "client": [
+    "client.CompositeBreakAnimationMixin",
+    "client.CompositeBreakProgressMixin",
+    "client.CompositeProxyPredictionMixin",
+    "client.CompositeTerrainParticleMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

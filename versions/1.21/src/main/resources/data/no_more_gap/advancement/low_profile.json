@@ -1,0 +1,11 @@
+{
+  "parent": "no_more_gap:it_fits",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "description": { "translate": "advancements.no_more_gap.low_profile.description" },
+    "icon": { "id": "minecraft:oak_fence" },
+    "title": { "translate": "advancements.no_more_gap.low_profile.title" }
+  },
+  "requirements": [["done"]],
+  "sends_telemetry_event": false
+}

@@ -61,6 +61,7 @@ public final class CompositeInteractionHandler {
                 return InteractionResult.SUCCESS_SERVER;
             }
             if (isDirectlyUsable(state)) {
+                if (level.isClientSide() && state.getBlock() instanceof ButtonBlock) return InteractionResult.SUCCESS;
                 CompositeUseContext.begin(level, compositePos, composite, part.id());
                 try {
                     var partHit = new net.minecraft.world.phys.BlockHitResult(hit.getLocation(), hit.getDirection(), compositePos, hit.isInside());
@@ -69,6 +70,9 @@ public final class CompositeInteractionHandler {
                         return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
                     }
                     var result = state.useWithoutItem(level, player, partHit);
+                    if (!level.isClientSide() && state.getBlock() instanceof ButtonBlock) {
+                        fr.xerneas02.nomoregap.advancement.ModAdvancements.checkCompactCircuit(player, composite);
+                    }
                     return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
                 } finally {
                     CompositeUseContext.end();

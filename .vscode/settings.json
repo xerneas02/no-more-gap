@@ -28,7 +28,7 @@
     {
       "label": "$(tools) Build",
       "task": "No More Gap: Build",
-      "tooltip": "Construire le mod"
+      "tooltip": "Construire le mod pour toutes les versions"
     }
   ]
 }

@@ -52,7 +52,10 @@ public final class CompositeChunkModel implements BlockStateModel {
             emitter.pushTransform(quad -> transform(quad, level, pos, part.state(), tx, ty, tz, turns, whiteVegetation));
             try {
                 random.setSeed(pos.asLong() ^ part.id());
-                models.get(part.state()).emitQuads(emitter, level, pos, part.state(), random, ignored -> false);
+                var model = models.get(part.state());
+                if (!(model instanceof CompositeChunkModel)) {
+                    model.emitQuads(emitter, level, pos, part.state(), random, ignored -> false);
+                }
             } finally {
                 emitter.popTransform();
             }
@@ -67,8 +70,8 @@ public final class CompositeChunkModel implements BlockStateModel {
     @Override public Material.Baked particleMaterial(BlockAndTintGetter level, BlockPos pos, BlockState state) {
         if (((FabricBlockGetter) level).getBlockEntityRenderData(pos) instanceof CompositeRenderData data) {
             for (var part : data.parts()) if (owns(data.cellOffset(), part)) {
-                return Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(part.state())
-                        .particleMaterial(level, pos, part.state());
+                var model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(part.state());
+                if (!(model instanceof CompositeChunkModel)) return model.particleMaterial(level, pos, part.state());
             }
         }
         return fallback.particleMaterial();
@@ -79,7 +82,10 @@ public final class CompositeChunkModel implements BlockStateModel {
         if (((FabricBlockGetter) level).getBlockEntityRenderData(pos) instanceof CompositeRenderData data) {
             var models = Minecraft.getInstance().getModelManager().getBlockStateModelSet();
             for (var part : data.parts()) if (isChunkRendered(part) && owns(data.cellOffset(), part)) {
-                flags |= models.get(part.state()).materialFlags(level, pos, part.state(), random);
+                var model = models.get(part.state());
+                if (!(model instanceof CompositeChunkModel)) {
+                    flags |= model.materialFlags(level, pos, part.state(), random);
+                }
             }
         }
         return flags;

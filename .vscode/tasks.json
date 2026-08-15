@@ -5,7 +5,7 @@
       "label": "No More Gap: Build",
       "type": "shell",
       "command": ".\\gradlew.bat",
-      "args": ["clean", "build"],
+      "args": ["buildAllVersions"],
       "options": {
         "cwd": "${workspaceFolder}",
         "env": {

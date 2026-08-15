@@ -26,12 +26,12 @@ dependencies {
 }
 
 processResources {
-	inputs.properties version: version, minecraft_version: minecraft_version
-	filesMatching('fabric.mod.json') { expand version: version, minecraft_version: minecraft_version }
+	inputs.properties version: version, minecraft_version: minecraft_version, fabric_api_version: fabric_api_version, java_version: java_version
+	filesMatching('fabric.mod.json') { expand version: version, minecraft_version: minecraft_version, fabric_api_version: fabric_api_version, java_version: java_version }
 }
 
 tasks.withType(JavaCompile).configureEach {
-	options.release = 25
+	options.release = Integer.parseInt(project.java_version)
 	options.encoding = 'UTF-8'
 }
 
@@ -39,6 +39,33 @@ tasks.withType(Test).configureEach { useJUnitPlatform() }
 
 java {
 	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	sourceCompatibility = JavaVersion.toVersion(project.java_version)
+	targetCompatibility = JavaVersion.toVersion(project.java_version)
+}
+
+def supportedMinecraftVersions = [
+	'26.1'  : '0.145.1+26.1',
+	'26.1.1': '0.145.4+26.1.1',
+	'26.1.2': '0.155.2+26.1.2',
+	'26.2'  : '0.152.2+26.2'
+]
+
+def versionBuildTasks = supportedMinecraftVersions.collect { minecraftVersion, fabricApiVersion ->
+	tasks.register("buildMinecraft${minecraftVersion.replace('.', '_')}", Exec) {
+		group = 'build'
+		description = "Builds No More Gap for Minecraft ${minecraftVersion}."
+		workingDir projectDir
+		commandLine 'cmd', '/c', 'gradlew.bat', 'build',
+			"-Pminecraft_version=${minecraftVersion}",
+			"-Pfabric_api_version=${fabricApiVersion}",
+			"-Pmod_version=${project.mod_version}+mc${minecraftVersion}",
+			"-Parchives_base_name=no-more-gap-${minecraftVersion}"
+	}
+}
+
+versionBuildTasks.drop(1).eachWithIndex { task, index -> task.configure { mustRunAfter(versionBuildTasks[index]) } }
+tasks.register('buildAllVersions') {
+	group = 'build'
+	description = 'Builds JARs for every supported Minecraft version.'
+	dependsOn(versionBuildTasks)
 }

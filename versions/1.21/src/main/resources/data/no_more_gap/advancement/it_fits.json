@@ -1,0 +1,11 @@
+{
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "background": "minecraft:gui/advancements/backgrounds/stone",
+    "description": { "translate": "advancements.no_more_gap.it_fits.description" },
+    "icon": { "id": "minecraft:piston" },
+    "title": { "translate": "advancements.no_more_gap.it_fits.title" }
+  },
+  "requirements": [["done"]],
+  "sends_telemetry_event": false
+}

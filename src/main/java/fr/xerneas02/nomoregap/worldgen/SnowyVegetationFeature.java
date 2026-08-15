@@ -45,8 +45,17 @@ public final class SnowyVegetationFeature extends Feature<NoneFeatureConfigurati
         for (int x = startX; x < startX + 16; x++) for (int z = startZ; z < startZ + 16; z++) {
             var pos = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z);
             var plant = level.getBlockState(pos);
-            if (!(plant.getBlock() instanceof VegetationBlock)
-                    || !level.getBiome(pos).value().coldEnoughToSnow(pos, level.getSeaLevel())) continue;
+            if (plant.getBlock() instanceof VegetationBlock) {
+                if (plant.is(net.minecraft.tags.BlockTags.CROPS)
+                        || level.getBlockState(pos.below()).is(Blocks.FARMLAND)) continue;
+            } else {
+                pos = pos.below();
+                plant = level.getBlockState(pos);
+                if (!(plant.getBlock() instanceof net.minecraft.world.level.block.FenceBlock)
+                        && !(plant.getBlock() instanceof net.minecraft.world.level.block.FenceGateBlock)) continue;
+                if (!level.getBlockState(pos.below()).is(Blocks.GRASS_BLOCK)) continue;
+            }
+            if (!level.getBiome(pos).value().coldEnoughToSnow(pos, level.getSeaLevel())) continue;
             if (!level.setBlock(pos, ModBlocks.COMPOSITE.defaultBlockState(),
                     Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS)) continue;
             if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)) {
@@ -60,6 +69,7 @@ public final class SnowyVegetationFeature extends Feature<NoneFeatureConfigurati
             } finally {
                 composite.endUpdate();
             }
+            level.scheduleTick(pos, ModBlocks.COMPOSITE, 1);
             var groundPos = pos.below();
             var ground = level.getBlockState(groundPos);
             if (ground.hasProperty(BlockStateProperties.SNOWY)) {

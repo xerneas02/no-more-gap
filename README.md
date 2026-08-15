@@ -1,4 +1,10 @@
-# No More Gap
+<p align="center">
+  <img src="docs/images/logo.png" alt="No More Gap logo" width="220">
+</p>
+
+<h1 align="center">No More Gap</h1>
+
+<p align="center"><strong>Place compatible Minecraft blocks together in the same cell.</strong></p>
 
 No More Gap is an experimental Fabric mod for Minecraft 26.1.2 that allows several blocks to occupy the same space.
 
@@ -13,6 +19,18 @@ Examples:
 - select and break an individual part of a composite.
 
 The mod is still experimental: it changes several core Minecraft behaviours, and compatibility with other mods is not guaranteed in every situation.
+
+![A snowy village enhanced by No More Gap](docs/images/snow-village.png)
+
+## Gallery
+
+| Compact interiors | Carpet stacking |
+|---|---|
+| ![Plants, lanterns, shelves, and carpets sharing compact spaces](docs/images/small-interior.png) | ![Sixteen carpet layers stacked in one block](docs/images/carpet-stack.png) |
+
+| Lava logging | Obsidian logging reaction |
+|---|---|
+| ![A lava-logged structure](docs/images/lava-logging.png) | ![The obsidian-logging reaction after contact with water](docs/images/obsidian-logging.png) |
 
 ## Features
 
@@ -92,18 +110,20 @@ The configuration-file values are only defaults used when a world is created. Th
 
 The mod includes small advancements in English and French:
 
-- **It Fits!** — put at least two blocks in one cell.
-- **At the Block’s Feet** — place a cover at a block’s feet.
-- **Carpet Diem** — stack 16 carpets in a composite.
-- **A Very Hot Bath** — use lava logging.
-- **Obsidian Log** — trigger the obsidian-logging reaction.
-- **Compact Circuit** — power a lamp from the same composite.
-- **Open to Everything** — make a door and carpet share a cell.
-- **A Stack of a Stack** — fill a composite with 64 parts.
+- **It Fits!** - put at least two blocks in one cell.
+- **At the Block’s Feet** - place a cover at a block’s feet.
+- **Carpet Diem** - stack 16 carpets in a composite.
+- **A Very Hot Bath** - use lava logging.
+- **Obsidian Log** - trigger the obsidian-logging reaction.
+- **Compact Circuit** - power a lamp from the same composite.
+- **Open to Everything** - make a door and carpet share a cell.
+- **A Stack of a Stack** - fill a composite with 64 parts.
 
 ## Installation
 
-Requirements for playing:
+### Minecraft 26.1.2
+
+Requirements:
 
 - Minecraft `26.1.2`;
 - Fabric Loader `0.19.3` or compatible;
@@ -111,6 +131,10 @@ Requirements for playing:
 - Java 25.
 
 Put the mod JAR and Fabric API in the `mods` folder of both the client and server. The mod must be installed on both sides.
+
+### Minecraft 1.21 to 1.21.11
+
+Dedicated builds are available in `versions/1.21/build/libs/`. Use the JAR whose filename exactly matches your Minecraft version. These builds require Java 21, Fabric Loader 0.19.3, and the matching Fabric API release.
 
 ## Building the mod
 
@@ -137,6 +161,14 @@ On Linux or macOS:
 ```
 
 JAR files are generated in `build/libs/`. Install the file without the `-sources` suffix.
+
+To build every Minecraft 1.21 variant on Windows:
+
+```powershell
+.\gradlew.bat -p versions\1.21 buildAllMinecraft121
+```
+
+The 1.21 JAR files are generated in `versions/1.21/build/libs/`.
 
 Useful tasks:
 

@@ -105,7 +105,20 @@ public final class CompositePlacementHandler {
             boolean footComposite = existingComposite != null && existingComposite.parts().view().stream().anyMatch(part ->
                     part.state().getBlock() instanceof SnowLayerBlock || part.state().getBlock() instanceof CarpetBlock
                             || part.state().getBlock() instanceof MossyCarpetBlock);
+            Block heldBlock = held.getItem() instanceof BlockItem heldBlockItem ? heldBlockItem.getBlock() : null;
+            boolean verticalBuildingBlock = heldBlock instanceof net.minecraft.world.level.block.FenceBlock
+                    || heldBlock instanceof net.minecraft.world.level.block.WallBlock;
+            boolean ceilingPlacement = player.isSecondaryUseActive() && effectiveHit.getDirection() == Direction.DOWN
+                    && (heldBlock instanceof net.minecraft.world.level.block.LanternBlock || verticalBuildingBlock);
+            var overhead = level.getBlockState(originalPos.above());
+            boolean underSlabPlacement = player.isSecondaryUseActive()
+                    && effectiveHit.getDirection() == Direction.UP
+                    && verticalBuildingBlock
+                    && overhead.getBlock() instanceof SlabBlock
+                    && overhead.getValue(SlabBlock.TYPE)
+                    == net.minecraft.world.level.block.state.properties.SlabType.TOP;
             if ((!player.isSecondaryUseActive() && !footComposite) || effectiveHit.getDirection() != Direction.UP
+                    && !ceilingPlacement
                     || (!footComposite && !matches(original, held.getItem()))
                     || original.getBlock() == ModBlocks.COMPOSITE_PROXY) {
                 return InteractionResult.PASS;
@@ -113,7 +126,8 @@ public final class CompositePlacementHandler {
             if (!(held.getItem() instanceof BlockItem blockItem)) return InteractionResult.PASS;
             var block = blockItem.getBlock();
             if (block instanceof EntityBlock || isUnsupportedRedstone(block)) return InteractionResult.PASS;
-            if (Block.isShapeFullBlock(original.getCollisionShape(level, originalPos, CollisionContext.of(player)))) {
+            if (!underSlabPlacement
+                    && Block.isShapeFullBlock(original.getCollisionShape(level, originalPos, CollisionContext.of(player)))) {
                 return InteractionResult.PASS;
             }
             var placed = block.getStateForPlacement(new BlockPlaceContext(player, hand, held, effectiveHit));
@@ -126,13 +140,29 @@ public final class CompositePlacementHandler {
                     placed = placed.setValue(BlockStateProperties.HORIZONTAL_FACING, player.getDirection().getOpposite());
                 }
             }
+            if (block instanceof net.minecraft.world.level.block.LanternBlock
+                    && placed.hasProperty(BlockStateProperties.HANGING)) {
+                placed = placed.setValue(BlockStateProperties.HANGING, ceilingPlacement);
+            }
             double localX = effectiveHit.getLocation().x - originalPos.getX();
             double localZ = effectiveHit.getLocation().z - originalPos.getZ();
             var context = CollisionContext.of(player);
-            var occupied = original.getCollisionShape(level, originalPos, context);
-            var surface = SurfaceExtractor.topAt(occupied, localX, localZ);
+            var occupied = existingComposite != null
+                    ? existingComposite.geometry(level, context).occupancy()
+                    : net.minecraft.world.phys.shapes.Shapes.or(
+                            original.getCollisionShape(level, originalPos, context),
+                            original.getShape(level, originalPos, context));
+            var surface = ceilingPlacement ? SurfaceExtractor.bottomAt(occupied, localX, localZ)
+                    : SurfaceExtractor.topAt(occupied, localX, localZ);
             if (surface.isEmpty()) return InteractionResult.PASS;
-            var transform = new LocalTransform(FixedPoint.ZERO, surface.get().y(), FixedPoint.ZERO, 0);
+            int transformYUnits = surface.get().y().units()
+                    - (ceilingPlacement ? FixedPoint.FULL_BLOCK.units() : 0);
+            if (transformYUnits < FixedPoint.MIN_UNITS || transformYUnits > FixedPoint.MAX_UNITS) {
+                return InteractionResult.FAIL;
+            }
+            var transform = new LocalTransform(FixedPoint.ZERO,
+                    new FixedPoint(transformYUnits),
+                    FixedPoint.ZERO, 0);
             var placedShape = placed.getShape(level, originalPos, context);
             if (OverlapTester.overlaps(occupied, placedShape, transform)) {
                 return InteractionResult.PASS;
@@ -181,6 +211,9 @@ public final class CompositePlacementHandler {
                     originalPos.getY() + 0.5 + transform.yDouble(), originalPos.getZ() + 0.5 + transform.zDouble(),
                     sound.getPlaceSound(), SoundSource.BLOCKS,
                     (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+            if (underSlabPlacement) {
+                fr.xerneas02.nomoregap.advancement.ModAdvancements.grant(player, "low_profile");
+            }
             fr.xerneas02.nomoregap.advancement.ModAdvancements.checkComposite(player, composite);
             return InteractionResult.SUCCESS_SERVER;
         });
@@ -205,6 +238,16 @@ public final class CompositePlacementHandler {
         if (!(item instanceof BlockItem blockItem)
                 || !(blockItem.getBlock() instanceof SnowLayerBlock || blockItem.getBlock() instanceof CarpetBlock
                 || blockItem.getBlock() instanceof MossyCarpetBlock)) return null;
+        if (hitState.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                && hitState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER) {
+            var below = hitPos.below();
+            var belowState = level.getBlockState(below);
+            return belowState.getBlock() == hitState.getBlock()
+                    && belowState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                    == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                    && canFootCover(belowState, level, below, player) ? new CoverTarget(below, belowState) : null;
+        }
         if (hit.getDirection() == Direction.UP) {
             var above = hitPos.above();
             var aboveState = level.getBlockState(above);

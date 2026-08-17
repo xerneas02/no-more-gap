@@ -35,30 +35,32 @@ public final class CompositePartUpdater {
         if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)) return;
         composite.beginUpdate();
         try {
-            for (var part : java.util.List.copyOf(composite.parts().view())) {
-                try {
-                    if (part.state().getBlock() instanceof TntBlock && level.hasNeighborSignal(pos)) {
-                        CompositeUseContext.run(level, pos, composite, part.id(), () ->
-                                part.state().handleNeighborChanged(level, pos,
-                                        net.minecraft.world.level.block.Blocks.AIR, null, false));
-                        continue;
-                    }
-                    var partPos = partPos(pos, part.transform());
-                    var updated = refreshRedstone(level, partPos, part.state());
-                    updated = refreshConnections(level, partPos, updated);
-                    if (updated != part.state()) {
-                        composite.replacePart(part.id(), updated);
-                        syncDoorTop(level, pos, updated);
-                    }
-                } catch (RuntimeException exception) {
-                    quarantine(level, pos, composite, part, exception);
-                }
-            }
+            for (var part : java.util.List.copyOf(composite.parts().view())) refreshPart(level, pos, composite, part);
         } finally {
             composite.endUpdate();
         }
         if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             fr.xerneas02.nomoregap.lava.LavaLoggingReactions.tryReact(serverLevel, pos);
+        }
+    }
+
+    private static void refreshPart(Level level, BlockPos pos, CompositeBlockEntity composite,
+                                    fr.xerneas02.nomoregap.part.PartInstance part) {
+        try {
+            if (part.state().getBlock() instanceof TntBlock && level.hasNeighborSignal(pos)) {
+                CompositeUseContext.run(level, pos, composite, part.id(), () ->
+                        part.state().handleNeighborChanged(level, pos,
+                                net.minecraft.world.level.block.Blocks.AIR, null, false));
+                return;
+            }
+            var partPos = partPos(pos, part.transform());
+            var updated = refreshConnections(level, partPos, refreshRedstone(level, partPos, part.state()));
+            if (updated != part.state()) {
+                composite.replacePart(part.id(), updated);
+                syncDoorTop(level, pos, updated);
+            }
+        } catch (RuntimeException exception) {
+            quarantine(level, pos, composite, part, exception);
         }
     }
 

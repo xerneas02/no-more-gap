@@ -226,16 +226,7 @@ public final class CompositeBlockEntity extends BlockEntity {
     /** Rebuilds every occupied neighbouring cell, including parts stacked above the anchor. */
     public void refreshProxies() {
         if (level == null || level.isClientSide()) return;
-        var required = new HashSet<BlockPos>();
-        var shape = geometry(level, CollisionContext.empty()).occupancy();
-        for (var box : shape.toAabbs()) {
-            int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
-            int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
-            for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
-                if (x == 0 && y == 0 && z == 0) continue;
-                required.add(worldPosition.offset(x, y, z).immutable());
-            }
-        }
+        var required = occupiedCells(geometry(level, CollisionContext.empty()).occupancy(), false);
         if (proxyPositions.isEmpty()) findLoadedProxies();
         for (var pos : Set.copyOf(proxyPositions)) {
             if (required.contains(pos)) continue;
@@ -266,15 +257,9 @@ public final class CompositeBlockEntity extends BlockEntity {
 
     private void findLoadedProxies() {
         if (level == null) return;
-        for (var box : geometry(level, CollisionContext.empty()).occupancy().toAabbs()) {
-            int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
-            int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
-            for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
-            if (x == 0 && y == 0 && z == 0) continue;
-            var pos = worldPosition.offset(x, y, z);
+        for (var pos : occupiedCells(geometry(level, CollisionContext.empty()).occupancy(), false)) {
             if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy && proxy.anchor().equals(worldPosition)) {
                 proxyPositions.add(pos.immutable());
-            }
             }
         }
     }
@@ -321,19 +306,24 @@ public final class CompositeBlockEntity extends BlockEntity {
 
     private void invalidateRenderCells() {
         if (level == null || !level.isClientSide()) return;
-        var positions = new HashSet<BlockPos>();
-        positions.add(worldPosition);
-        for (var box : geometry(level, CollisionContext.empty()).selection().toAabbs()) {
-            int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
-            int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
-            for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
-                positions.add(worldPosition.offset(x, y, z));
-            }
-        }
+        var positions = occupiedCells(geometry(level, CollisionContext.empty()).selection(), true);
         for (var pos : positions) {
             var state = level.getBlockState(pos);
             level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
         }
+    }
+
+    private Set<BlockPos> occupiedCells(VoxelShape shape, boolean includeAnchor) {
+        var positions = new HashSet<BlockPos>();
+        for (var box : shape.toAabbs()) {
+            int minX = (int) Math.floor(box.minX), minY = (int) Math.floor(box.minY), minZ = (int) Math.floor(box.minZ);
+            int maxX = (int) Math.floor(box.maxX - 1.0e-7), maxY = (int) Math.floor(box.maxY - 1.0e-7), maxZ = (int) Math.floor(box.maxZ - 1.0e-7);
+            for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
+                if (includeAnchor || x != 0 || y != 0 || z != 0) positions.add(worldPosition.offset(x, y, z).immutable());
+            }
+        }
+        if (includeAnchor) positions.add(worldPosition);
+        return positions;
     }
 
     private static boolean isInternalPart(BlockState state) {

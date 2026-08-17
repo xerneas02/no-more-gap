@@ -106,6 +106,16 @@ public final class CompositePlacementHandler {
                 if (level.isClientSide()) return InteractionResult.SUCCESS;
                 return addFootCover(player, level, hand, coverTarget.pos(), coverTarget.state(), held.getItem());
             }
+            return tryPlaceInComposite(player, level, hand, effectiveHit, originalPos, original, held);
+    }
+
+    private static InteractionResult tryPlaceInComposite(net.minecraft.world.entity.player.Player player,
+                                                          net.minecraft.world.level.Level level,
+                                                          net.minecraft.world.InteractionHand hand,
+                                                          net.minecraft.world.phys.BlockHitResult hit,
+                                                          net.minecraft.core.BlockPos originalPos,
+                                                          BlockState original,
+                                                          ItemStack held) {
             var existingComposite = level.getBlockEntity(originalPos) instanceof CompositeBlockEntity existing ? existing : null;
             boolean footComposite = existingComposite != null && existingComposite.parts().view().stream().anyMatch(part ->
                     part.state().getBlock() instanceof SnowLayerBlock || part.state().getBlock() instanceof CarpetBlock
@@ -113,16 +123,16 @@ public final class CompositePlacementHandler {
             Block heldBlock = held.getItem() instanceof BlockItem heldBlockItem ? heldBlockItem.getBlock() : null;
             boolean verticalBuildingBlock = heldBlock instanceof net.minecraft.world.level.block.FenceBlock
                     || heldBlock instanceof net.minecraft.world.level.block.WallBlock;
-            boolean ceilingPlacement = player.isSecondaryUseActive() && effectiveHit.getDirection() == Direction.DOWN
+            boolean ceilingPlacement = player.isSecondaryUseActive() && hit.getDirection() == Direction.DOWN
                     && (heldBlock instanceof net.minecraft.world.level.block.LanternBlock || verticalBuildingBlock);
             var overhead = level.getBlockState(originalPos.above());
             boolean underSlabPlacement = player.isSecondaryUseActive()
-                    && effectiveHit.getDirection() == Direction.UP
+                    && hit.getDirection() == Direction.UP
                     && verticalBuildingBlock
                     && overhead.getBlock() instanceof SlabBlock
                     && overhead.getValue(SlabBlock.TYPE)
                     == net.minecraft.world.level.block.state.properties.SlabType.TOP;
-            if ((!player.isSecondaryUseActive() && !footComposite) || effectiveHit.getDirection() != Direction.UP
+            if ((!player.isSecondaryUseActive() && !footComposite) || hit.getDirection() != Direction.UP
                     && !ceilingPlacement
                     || (!footComposite && !matches(original, held.getItem()))
                     || original.getBlock() == ModBlocks.COMPOSITE_PROXY) {
@@ -135,7 +145,7 @@ public final class CompositePlacementHandler {
                     && Block.isShapeFullBlock(original.getCollisionShape(level, originalPos, CollisionContext.of(player)))) {
                 return InteractionResult.PASS;
             }
-            var placed = block.getStateForPlacement(new BlockPlaceContext(player, hand, held, effectiveHit));
+            var placed = block.getStateForPlacement(new BlockPlaceContext(player, hand, held, hit));
             if (placed == null) {
                 placed = block.defaultBlockState();
                 if (placed.hasProperty(BlockStateProperties.ATTACH_FACE)) {
@@ -149,8 +159,8 @@ public final class CompositePlacementHandler {
                     && placed.hasProperty(BlockStateProperties.HANGING)) {
                 placed = placed.setValue(BlockStateProperties.HANGING, ceilingPlacement);
             }
-            double localX = effectiveHit.getLocation().x - originalPos.getX();
-            double localZ = effectiveHit.getLocation().z - originalPos.getZ();
+            double localX = hit.getLocation().x - originalPos.getX();
+            double localZ = hit.getLocation().z - originalPos.getZ();
             var context = CollisionContext.of(player);
             var occupied = existingComposite != null
                     ? existingComposite.geometry(level, context).selection()

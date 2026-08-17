@@ -34,7 +34,13 @@ public final class CompositePlacementHandler {
     private CompositePlacementHandler() {}
 
     public static void initialize() {
-        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+        UseBlockCallback.EVENT.register(CompositePlacementHandler::useBlock);
+    }
+
+    private static InteractionResult useBlock(net.minecraft.world.entity.player.Player player,
+                                              net.minecraft.world.level.Level level,
+                                              net.minecraft.world.InteractionHand hand,
+                                              net.minecraft.world.phys.BlockHitResult hit) {
             var held = player.getItemInHand(hand);
             var effectiveHit = hit;
             if (level.getBlockEntity(hit.getBlockPos()) instanceof CompositeProxyBlockEntity proxy
@@ -214,7 +220,6 @@ public final class CompositePlacementHandler {
             }
             fr.xerneas02.nomoregap.advancement.ModAdvancements.checkComposite(player, composite);
             return InteractionResult.SUCCESS_SERVER;
-        });
     }
 
     static boolean matches(BlockState state, Item item) {

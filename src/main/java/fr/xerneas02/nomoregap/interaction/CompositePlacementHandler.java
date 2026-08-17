@@ -148,10 +148,8 @@ public final class CompositePlacementHandler {
             double localZ = effectiveHit.getLocation().z - originalPos.getZ();
             var context = CollisionContext.of(player);
             var occupied = existingComposite != null
-                    ? existingComposite.geometry(level, context).occupancy()
-                    : net.minecraft.world.phys.shapes.Shapes.or(
-                            original.getCollisionShape(level, originalPos, context),
-                            original.getShape(level, originalPos, context));
+                    ? existingComposite.geometry(level, context).selection()
+                    : original.getShape(level, originalPos, context);
             var surface = ceilingPlacement ? SurfaceExtractor.bottomAt(occupied, localX, localZ)
                     : SurfaceExtractor.topAt(occupied, localX, localZ);
             if (surface.isEmpty()) return InteractionResult.PASS;

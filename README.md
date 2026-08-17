@@ -293,6 +293,9 @@ src/client/java/fr/xerneas02/nomoregap/
 ├── render/       chunk models and block entity renderer
 └── mixin/client/ client-only injections
 ```
+## Inspiration
+
+No More Gap was developed independently, but the project was inspired in part by existing approaches to multipart blocks and extended block occupancy, including Vanilla Parts, CB Multipart, Snow! Real Magic!, and Fluidlogged. No source code from these projects is currently included in No More Gap.
 
 ## License
 

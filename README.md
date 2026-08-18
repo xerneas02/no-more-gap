@@ -299,4 +299,4 @@ No More Gap was developed independently, but the project was inspired in part by
 
 ## License
 
-All Rights Reserved. See the project metadata for the author and current version.
+Licensed under the GNU General Public License v3.0 only (`GPL-3.0-only`). See [LICENSE](LICENSE).

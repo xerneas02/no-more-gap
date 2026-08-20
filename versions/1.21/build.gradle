@@ -16,6 +16,32 @@ loom {
     }
 }
 
+// The fabric-gametest-api-v1 module can only be resolved through
+// fabricApi.module() for recent fabric-api generations (1.21.5+); older
+// versions simply build without game tests (the matrix tasks exclude them).
+def supportsGameTests = minecraft_version in
+        ['1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11']
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "no-more-gap-test"
+        enableGameTests = supportsGameTests
+        enableClientGameTests = false
+        eula = true
+        clearRunDirectory = true
+    }
+}
+
+// Share the game test sources and resources with the main branch: the tests
+// only rely on the Fabric GameTest annotation and stable Minecraft APIs.
+sourceSets.gametest.java.srcDir '../../src/gametest/java'
+sourceSets.gametest.resources.srcDir '../../src/gametest/resources'
+
+// Share the unit tests with the main branch as well: the tests only use APIs
+// stable across the supported versions (the local copies were removed).
+sourceSets.test.java.srcDir '../../src/test/java'
+
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings loom.officialMojangMappings()
@@ -24,6 +50,15 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
+    // The game test module must be on a remapped (modImplementation) configuration
+    // so the run classpath uses project mappings, and it is inherited by the
+    // gametest source set through the main source set's classpath.
+    if (supportsGameTests) {
+        modImplementation fabricApi.module("fabric-gametest-api-v1", "${fabric_api_version}")
+    }
+    gametestImplementation platform('org.junit:junit-bom:5.11.4')
+    gametestImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 processResources {
@@ -122,7 +157,11 @@ def minecraft121Builds = minecraft121Versions.collect { gameVersion, apiVersion 
     tasks.register("buildMinecraft${gameVersion.replace('.', '_')}", Exec) {
         group = 'build'
         workingDir projectDir
-        commandLine file('../../gradlew.bat'), 'build',
+        // Game tests are heavy and their shared sources target the modern API:
+        // the version matrix builds unit tests and jars only. Run `check` or
+        // `runGameTest` explicitly for the default version to run game tests.
+        def wrapper = System.getProperty('os.name').toLowerCase().contains('windows') ? '../../gradlew.bat' : '../../gradlew'
+        commandLine wrapper, 'build', '-x', 'runGameTest',
                 "-Pminecraft_version=${gameVersion}", "-Pfabric_api_version=${apiVersion}",
                 "-Parchives_base_name=no-more-gap-${gameVersion}", '--console=plain'
     }

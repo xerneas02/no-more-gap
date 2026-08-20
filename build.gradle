@@ -16,6 +16,17 @@ loom {
 	}
 }
 
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "no-more-gap-test"
+		enableGameTests = true
+		enableClientGameTests = false
+		eula = true
+		clearRunDirectory = true
+	}
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${loader_version}"
@@ -23,6 +34,10 @@ dependencies {
 	testImplementation platform('org.junit:junit-bom:6.0.3')
 	testImplementation 'org.junit.jupiter:junit-jupiter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
+	gametestImplementation platform('org.junit:junit-bom:6.0.3')
+	gametestImplementation 'org.junit.jupiter:junit-jupiter'
+	gametestImplementation fabricApi.module("fabric-gametest-api-v1", "${fabric_api_version}")
 }
 
 processResources {
@@ -50,12 +65,17 @@ def supportedMinecraftVersions = [
 	'26.2'  : '0.152.2+26.2'
 ]
 
+// CI runs on Linux; keep the version-matrix tasks portable instead of Windows-only.
+def gradleWrapper = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : './gradlew'
+
 def versionBuildTasks = supportedMinecraftVersions.collect { minecraftVersion, fabricApiVersion ->
 	tasks.register("buildMinecraft${minecraftVersion.replace('.', '_')}", Exec) {
 		group = 'build'
 		description = "Builds No More Gap for Minecraft ${minecraftVersion}."
 		workingDir projectDir
-		commandLine 'cmd', '/c', 'gradlew.bat', 'build',
+		// Game tests are heavy: they run with `check`/`runGameTest` on the main
+		// version only; the version matrix builds unit tests and jars.
+		commandLine gradleWrapper, 'build', '-x', 'runGameTest',
 			"-Pminecraft_version=${minecraftVersion}",
 			"-Pfabric_api_version=${fabricApiVersion}",
 			"-Pmod_version=${project.mod_version}+mc${minecraftVersion}",
@@ -70,9 +90,19 @@ tasks.register('buildAllVersions') {
 	dependsOn(versionBuildTasks)
 }
 
-tasks.register('buildNeoForge26_2', Exec) {
+def neoForge26Versions = ['26.1', '26.1.1', '26.1.2', '26.2']
+def neoForge26Builds = neoForge26Versions.collect { gameVersion ->
+    tasks.register("buildNeoForge${gameVersion.replace('.', '_')}", Exec) {
+	    group = 'build'
+	    description = "Builds the NeoForge port for Minecraft ${gameVersion}."
+	    workingDir projectDir
+	    commandLine gradleWrapper, '-p', 'versions/neoforge-26.2',
+		    "buildMinecraft${gameVersion.replace('.', '_')}", '--console=plain'
+    }
+}
+neoForge26Builds.drop(1).eachWithIndex { task, index -> task.configure { mustRunAfter neoForge26Builds[index] } }
+tasks.register('buildAllNeoForge26') {
 	group = 'build'
-	description = 'Builds the NeoForge port for Minecraft 26.2.'
-	workingDir projectDir
-	commandLine 'cmd', '/c', 'gradlew.bat', '-p', 'versions/neoforge-26.2', 'build', '--console=plain'
+	description = 'Builds every NeoForge 26.x port.'
+	dependsOn neoForge26Builds
 }

@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # Full pipeline on the main version: unit tests + Fabric game tests + jar.
+  test-main:
+    name: "Tests (MC 26.1.2)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Build, unit-test and run game tests
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-main-26.1.2
+          path: |
+            build/reports/
+            build/test-results/
+            build/run/gameTest/logs/
+            build/run/gameTest/crash-reports/
+            logs/
+          if-no-files-found: ignore
+
+  # Representative version matrix: one legacy 1.21, the modern 1.21, and the
+  # other modern 26.x line. Game tests are excluded here (they are heavy and
+  # run on the main version); these builds compile, unit-test and jar each MC.
+  test-versions:
+    name: "Build (MC ${{ matrix.version }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: 1.21.5
+            api: 0.128.2+1.21.5
+            dir: versions/1.21
+            java: "21"
+          - version: 1.21.11
+            api: 0.141.6+1.21.11
+            dir: versions/1.21
+            java: "21"
+          - version: 26.2
+            api: 0.152.2+26.2
+            dir: .
+            java: "25"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: gradle
+
+      - name: Build and unit-test (no game tests)
+        run: |
+          cd "${{ matrix.dir }}"
+          ./gradlew build -x runGameTest \
+            -Pminecraft_version=${{ matrix.version }} \
+            -Pfabric_api_version=${{ matrix.api }} \
+            --no-daemon --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-mc-${{ matrix.version }}
+          path: |
+            build/reports/
+            build/test-results/
+            logs/
+          if-no-files-found: ignore
+
+  # Full multi-version build (all supported MC versions) on release tags only:
+  # it is expensive and is reserved for the release pipeline.
+  build-all:
+    name: "Build all versions (release)"
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Build every Fabric version (26.x + 1.21.x)
+        run: |
+          ./gradlew buildAllVersions --no-daemon --stacktrace
+          cd versions/1.21
+          ../../gradlew buildAllMinecraft121 --no-daemon --stacktrace
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-version-jars
+          path: |
+            build/libs/
+            versions/1.21/build/libs/
+            build/reports/
+          if-no-files-found: ignore

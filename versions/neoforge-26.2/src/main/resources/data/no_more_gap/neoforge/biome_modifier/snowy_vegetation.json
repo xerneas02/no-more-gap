@@ -1,0 +1,6 @@
+{
+  "type": "neoforge:add_features",
+  "biomes": "#minecraft:is_overworld",
+  "features": "no_more_gap:snowy_vegetation",
+  "step": "top_layer_modification"
+}

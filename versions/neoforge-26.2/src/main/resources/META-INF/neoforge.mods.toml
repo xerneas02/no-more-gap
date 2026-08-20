@@ -1,0 +1,28 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="GPL-3.0-only"
+
+[[mixins]]
+config="no_more_gap.mixins.json"
+
+[[mods]]
+modId="no_more_gap"
+version="${file.jarVersion}"
+displayName="No More Gap"
+iconFile="assets/no_more_gap/icon.png"
+authors="xerneas02"
+description='''Place compatible Minecraft blocks together in the same cell.'''
+
+[[dependencies.no_more_gap]]
+modId="neoforge"
+type="required"
+versionRange="[26.2.0.59,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.no_more_gap]]
+modId="minecraft"
+type="required"
+versionRange="[26.2]"
+ordering="NONE"
+side="BOTH"

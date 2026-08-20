@@ -1,0 +1,67 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+version = mod_version
+group = maven_group
+base.archivesName = archives_base_name
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(Integer.parseInt(java_version))
+
+neoForge {
+    version = neo_version
+    runs {
+        client { client() }
+        server { server(); programArgument '--nogui' }
+    }
+    mods { no_more_gap { sourceSet sourceSets.main } }
+    unitTest {
+        enable()
+        testedMod = mods.no_more_gap
+    }
+}
+
+def fabricOnly = [
+        'fr/xerneas02/nomoregap/NoMoreGap.java',
+        'fr/xerneas02/nomoregap/config/NoMoreGapConfig.java',
+        'fr/xerneas02/nomoregap/lava/LavaLoggingRules.java',
+        'fr/xerneas02/nomoregap/network/NoMoreGapNetworking.java',
+        'fr/xerneas02/nomoregap/registry/ModBlocks.java',
+        'fr/xerneas02/nomoregap/registry/ModItems.java',
+        'fr/xerneas02/nomoregap/registry/ModBlockEntities.java',
+        'fr/xerneas02/nomoregap/rule/CompositeRules.java',
+        'fr/xerneas02/nomoregap/NoMoreGapClient.java',
+        'fr/xerneas02/nomoregap/render/CompositeChunkModel.java'
+]
+
+sourceSets {
+    main {
+        java {
+            srcDirs '../../src/main/java', '../../src/client/java', 'src/main/java'
+            exclude { details ->
+                !details.file.toPath().startsWith(project.file('src/main/java').toPath())
+                        && fabricOnly.any { details.file.path.replace('\\', '/').endsWith(it) }
+            }
+        }
+        resources {
+            srcDirs = ['../../src/main/resources', 'src/main/resources']
+            exclude 'fabric.mod.json'
+        }
+    }
+    test {
+        java.srcDir '../../src/test/java'
+    }
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:6.0.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = Integer.parseInt(java_version)
+    options.encoding = 'UTF-8'
+}
+tasks.withType(Test).configureEach { useJUnitPlatform() }

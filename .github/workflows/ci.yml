@@ -36,6 +36,38 @@ jobs:
             logs/
           if-no-files-found: ignore
 
+  # NeoForge port: unit tests + server game tests + jar.
+  test-neoforge:
+    name: "Tests NeoForge (MC 26.2)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Build, unit-test and run NeoForge game tests
+        run: |
+          cd versions/neoforge-26.2
+          ../../gradlew build runGameTestServer --no-daemon --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-neoforge-26.2
+          path: |
+            build/reports/
+            build/test-results/
+            run/logs/
+            run/crash-reports/
+          if-no-files-found: ignore
+
   # Representative version matrix: one legacy 1.21, the modern 1.21, and the
   # other modern 26.x line. Game tests are excluded here (they are heavy and
   # run on the main version); these builds compile, unit-test and jar each MC.

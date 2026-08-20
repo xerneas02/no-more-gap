@@ -69,3 +69,10 @@ tasks.register('buildAllVersions') {
 	description = 'Builds JARs for every supported Minecraft version.'
 	dependsOn(versionBuildTasks)
 }
+
+tasks.register('buildNeoForge26_2', Exec) {
+	group = 'build'
+	description = 'Builds the NeoForge port for Minecraft 26.2.'
+	workingDir projectDir
+	commandLine 'cmd', '/c', 'gradlew.bat', '-p', 'versions/neoforge-26.2', 'build', '--console=plain'
+}

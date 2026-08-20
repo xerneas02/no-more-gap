@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Client",
+      "presentation": {
+        "group": "Mod Development - no-more-gap-neoforge-26.2",
+        "order": 0
+      },
+      "projectName": "no-more-gap-neoforge-26.2",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Documents\\Mathis\\prog\\Java\\no-more-gap\\versions\\neoforge-26.2\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Documents\\Mathis\\prog\\Java\\no-more-gap\\versions\\neoforge-26.2\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dno_more_gap%%D:\\Documents\\Mathis\\prog\\Java\\no-more-gap\\versions\\neoforge-26.2\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Server",
+      "presentation": {
+        "group": "Mod Development - no-more-gap-neoforge-26.2",
+        "order": 1
+      },
+      "projectName": "no-more-gap-neoforge-26.2",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Documents\\Mathis\\prog\\Java\\no-more-gap\\versions\\neoforge-26.2\\build\\moddev\\serverRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Documents\\Mathis\\prog\\Java\\no-more-gap\\versions\\neoforge-26.2\\build\\moddev\\serverRunVmArgs.txt",
+        "-Dfml.modFolders\u003dno_more_gap%%D:\\Documents\\Mathis\\prog\\Java\\no-more-gap\\versions\\neoforge-26.2\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    }
+  ]
+}

@@ -30,11 +30,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
 
 /** Emits immutable composite parts into NeoForge's cached chunk geometry. */
 public final class CompositeChunkModel extends DelegateBlockStateModel implements DynamicBlockStateModel {
     public static final ModelProperty<CompositeRenderData> DATA = new ModelProperty<>();
     private static final Set<Long> CHUNK_RENDERED = ConcurrentHashMap.newKeySet();
+    private static final LongAdder COLLECT_CALLS = new LongAdder();
+    private static final LongAdder MISSING_DATA = new LongAdder();
+    private static final LongAdder EMITTED_CELLS = new LongAdder();
+    private static final LongAdder EMITTED_PARTS = new LongAdder();
+    private static final LongAdder EMITTED_QUADS = new LongAdder();
+    private static final LongAdder KEY_CALLS = new LongAdder();
+    private static final LongAdder MISSING_KEYS = new LongAdder();
+    private static volatile Object renderedLevel;
 
     public CompositeChunkModel(BlockStateModel delegate) { super(delegate); }
 
@@ -42,15 +51,18 @@ public final class CompositeChunkModel extends DelegateBlockStateModel implement
         return part.flags() != LavaLoggingReactions.FORMED_ROCK;
     }
 
-    public static boolean hasChunkGeometry(BlockPos pos) { return CHUNK_RENDERED.contains(pos.asLong()); }
-    public static boolean hasChunkGeometry(long pos) { return CHUNK_RENDERED.contains(pos); }
+    public static boolean hasChunkGeometry(BlockPos pos) { return hasChunkGeometry(pos.asLong()); }
+    public static boolean hasChunkGeometry(long pos) {
+        return renderedLevel == Minecraft.getInstance().level && CHUNK_RENDERED.contains(pos);
+    }
 
     @Override public void collectParts(BlockAndTintGetter level, BlockPos pos, BlockState state,
                                        RandomSource random, List<BlockStateModelPart> output) {
+        COLLECT_CALLS.increment();
         long packedPos = pos.asLong();
         CompositeRenderData data = data(level, pos);
         if (data == null) {
-            CHUNK_RENDERED.remove(packedPos);
+            MISSING_DATA.increment();
             return;
         }
         int initialSize = output.size();
@@ -71,15 +83,32 @@ public final class CompositeChunkModel extends DelegateBlockStateModel implement
             boolean suppressTint = snowyCell && part.state().getBlock() instanceof VegetationBlock
                     && !(part.state().getBlock() instanceof DoublePlantBlock)
                     && !NoMoreGapConfig.snowLoggedVegetationBiomeTint();
-            for (var source : sourceParts) output.add(transform(source, level, pos, part.state(), tx, ty, tz,
-                    part.transform().quarterTurns(), suppressTint));
+            for (var source : sourceParts) {
+                var transformed = transform(source, level, pos, part.state(), tx, ty, tz,
+                        part.transform().quarterTurns(), suppressTint);
+                output.add(transformed);
+                EMITTED_PARTS.increment();
+                EMITTED_QUADS.add(((TransformedPart) transformed).quads().size());
+            }
         }
-        if (output.size() > initialSize) CHUNK_RENDERED.add(packedPos);
-        else CHUNK_RENDERED.remove(packedPos);
+        if (output.size() > initialSize) {
+            EMITTED_CELLS.increment();
+            markChunkRendered(packedPos);
+        }
     }
 
     @Override public Object createGeometryKey(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random) {
-        return new GeometryKey(data(level, pos), pos.immutable());
+        KEY_CALLS.increment();
+        CompositeRenderData data = data(level, pos);
+        if (data == null) MISSING_KEYS.increment();
+        return new GeometryKey(data, pos.immutable());
+    }
+
+    public static String diagnostics() {
+        return "chunk{keys=" + KEY_CALLS.sumThenReset() + ", missingKeys=" + MISSING_KEYS.sumThenReset()
+                + ", collects=" + COLLECT_CALLS.sumThenReset() + ", missingData=" + MISSING_DATA.sumThenReset()
+                + ", cells=" + EMITTED_CELLS.sumThenReset() + ", parts=" + EMITTED_PARTS.sumThenReset()
+                + ", quads=" + EMITTED_QUADS.sumThenReset() + ", cachedPositions=" + CHUNK_RENDERED.size() + "}";
     }
 
     @Override public Material.Baked particleMaterial(BlockAndTintGetter level, BlockPos pos, BlockState state) {
@@ -146,6 +175,17 @@ public final class CompositeChunkModel extends DelegateBlockStateModel implement
 
     private static @Nullable CompositeRenderData data(BlockAndTintGetter level, BlockPos pos) {
         return ((IBlockGetterExtension) level).getModelData(pos).get(DATA);
+    }
+
+    private static void markChunkRendered(long pos) {
+        Object currentLevel = Minecraft.getInstance().level;
+        if (renderedLevel != currentLevel) synchronized (CHUNK_RENDERED) {
+            if (renderedLevel != currentLevel) {
+                CHUNK_RENDERED.clear();
+                renderedLevel = currentLevel;
+            }
+        }
+        CHUNK_RENDERED.add(pos);
     }
 
     private static boolean owns(BlockPos cell, PartInstance part) {

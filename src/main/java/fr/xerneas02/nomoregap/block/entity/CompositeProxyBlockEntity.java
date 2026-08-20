@@ -18,7 +18,7 @@ public final class CompositeProxyBlockEntity extends BlockEntity {
     public BlockPos anchor() { return anchor; }
     public void setAnchor(BlockPos anchor) { this.anchor = anchor.immutable(); setChanged(); }
 
-    @Override public Object getRenderData() {
+    public Object getRenderData() {
         if (level != null && level.getBlockEntity(anchor) instanceof CompositeBlockEntity composite) {
             return new fr.xerneas02.nomoregap.renderdata.CompositeRenderData(composite.revision(),
                     composite.parts().view(), worldPosition.subtract(anchor));

@@ -7,7 +7,6 @@ import fr.xerneas02.nomoregap.geometry.FixedPoint;
 import fr.xerneas02.nomoregap.geometry.LocalTransform;
 import fr.xerneas02.nomoregap.registry.ModBlocks;
 import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.commands.CommandSourceStack;
@@ -29,11 +28,7 @@ public final class NoMoreGapDebugCommand {
 
     private NoMoreGapDebugCommand() {}
 
-    public static void initialize() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, context, environment) -> register(dispatcher));
-    }
-
-    private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(root("no_more_gap"));
         dispatcher.register(root("nmg"));
     }

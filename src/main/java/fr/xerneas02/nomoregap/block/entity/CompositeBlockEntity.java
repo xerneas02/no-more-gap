@@ -46,7 +46,7 @@ public final class CompositeBlockEntity extends BlockEntity {
     public long revision() { return revision; }
     public boolean isGeometryDirty() { return geometryDirty; }
 
-    @Override public Object getRenderData() {
+    public Object getRenderData() {
         return new fr.xerneas02.nomoregap.renderdata.CompositeRenderData(revision, parts.view(), BlockPos.ZERO);
     }
 

@@ -3,14 +3,18 @@ package fr.xerneas02.nomoregap.interaction;
 import fr.xerneas02.nomoregap.block.CompositeBlock;
 import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
 import fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity;
-import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.InteractionResult;
 
 public final class CreativeCompositeBreakingHandler {
     private CreativeCompositeBreakingHandler() {}
 
-    public static void initialize() {
-        AttackBlockCallback.EVENT.register((player, level, hand, pos, direction) -> {
+    public static InteractionResult attackBlock(Player player, Level level, InteractionHand hand,
+                                                BlockPos pos, Direction direction) {
             if (!player.isCreative()) return InteractionResult.PASS;
             var anchorPos = pos;
             var composite = level.getBlockEntity(pos) instanceof CompositeBlockEntity direct ? direct : null;
@@ -41,6 +45,5 @@ public final class CreativeCompositeBreakingHandler {
                 CompositeBlock.restoreAfterRemoval(level, anchorPos, targetComposite, target.get().id());
             }
             return InteractionResult.SUCCESS_SERVER;
-        });
     }
 }

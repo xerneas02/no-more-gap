@@ -5,8 +5,6 @@ import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
 import fr.xerneas02.nomoregap.config.NoMoreGapConfig;
 import fr.xerneas02.nomoregap.geometry.LocalTransform;
 import fr.xerneas02.nomoregap.registry.ModBlocks;
-import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
-import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -23,21 +21,18 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 
 public final class SnowyVegetationFeature extends Feature<NoneFeatureConfiguration> {
-    private static final ResourceKey<PlacedFeature> PLACED = ResourceKey.create(
+    public static final ResourceKey<PlacedFeature> PLACED = ResourceKey.create(
             Registries.PLACED_FEATURE, NoMoreGap.id("snowy_vegetation"));
 
-    private SnowyVegetationFeature() { super(NoneFeatureConfiguration.CODEC); }
+    public SnowyVegetationFeature() { super(NoneFeatureConfiguration.CODEC); }
 
     public static void initialize() {
         net.minecraft.core.Registry.register(BuiltInRegistries.FEATURE, NoMoreGap.id("snowy_vegetation"),
                 new SnowyVegetationFeature());
-        if (NoMoreGapConfig.snowyVegetationGeneration()) {
-            BiomeModifications.addFeature(BiomeSelectors.foundInOverworld(),
-                    GenerationStep.Decoration.TOP_LAYER_MODIFICATION, PLACED);
-        }
     }
 
     @Override public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
+        if (!NoMoreGapConfig.snowyVegetationGeneration()) return false;
         var level = context.level();
         int startX = context.origin().getX();
         int startZ = context.origin().getZ();

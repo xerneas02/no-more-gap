@@ -22,7 +22,7 @@ import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
 import fr.xerneas02.nomoregap.lava.LavaLoggingReactions;
 
 /** Prototype renderer. Static parts should eventually be cached in chunk geometry. */
-public final class CompositeBlockEntityRenderer implements BlockEntityRenderer<CompositeBlockEntity, CompositeBlockEntityRenderer.State> {
+public class CompositeBlockEntityRenderer implements BlockEntityRenderer<CompositeBlockEntity, CompositeBlockEntityRenderer.State> {
     private static BlockPos breakingAnchor;
     private static int breakingStage = -1;
     private final BlockModelResolver resolver;

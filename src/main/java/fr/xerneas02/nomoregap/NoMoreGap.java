@@ -25,10 +25,17 @@ public final class NoMoreGap implements ModInitializer {
         LavaLoggingRules.initialize();
         CompositeRules.initialize();
         ModRegistries.initialize();
+        if (NoMoreGapConfig.snowyVegetationGeneration()) {
+            net.fabricmc.fabric.api.biome.v1.BiomeModifications.addFeature(
+                    net.fabricmc.fabric.api.biome.v1.BiomeSelectors.foundInOverworld(),
+                    net.minecraft.world.level.levelgen.GenerationStep.Decoration.TOP_LAYER_MODIFICATION,
+                    fr.xerneas02.nomoregap.worldgen.SnowyVegetationFeature.PLACED);
+        }
         NoMoreGapNetworking.initialize();
-        NoMoreGapDebugCommand.initialize();
-        CompositePlacementHandler.initialize();
-        CreativeCompositeBreakingHandler.initialize();
-        CompositeInteractionHandler.initialize();
+        net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
+                (dispatcher, context, environment) -> NoMoreGapDebugCommand.register(dispatcher));
+        net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register(CompositePlacementHandler::useBlock);
+        net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register(CompositeInteractionHandler::useBlock);
+        net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register(CreativeCompositeBreakingHandler::attackBlock);
     }
 }

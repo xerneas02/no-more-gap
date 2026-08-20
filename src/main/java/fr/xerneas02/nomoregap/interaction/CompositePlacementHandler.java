@@ -9,7 +9,6 @@ import fr.xerneas02.nomoregap.geometry.OverlapTester;
 import fr.xerneas02.nomoregap.geometry.SurfaceExtractor;
 import fr.xerneas02.nomoregap.registry.ModBlocks;
 import fr.xerneas02.nomoregap.lava.LavaLogging;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
@@ -33,11 +32,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 public final class CompositePlacementHandler {
     private CompositePlacementHandler() {}
 
-    public static void initialize() {
-        UseBlockCallback.EVENT.register(CompositePlacementHandler::useBlock);
-    }
-
-    private static InteractionResult useBlock(net.minecraft.world.entity.player.Player player,
+    public static InteractionResult useBlock(net.minecraft.world.entity.player.Player player,
                                               net.minecraft.world.level.Level level,
                                               net.minecraft.world.InteractionHand hand,
                                               net.minecraft.world.phys.BlockHitResult hit) {

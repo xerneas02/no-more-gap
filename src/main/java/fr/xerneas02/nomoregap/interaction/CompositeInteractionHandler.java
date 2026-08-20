@@ -1,7 +1,6 @@
 package fr.xerneas02.nomoregap.interaction;
 
 import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.DoorBlock;
@@ -18,8 +17,10 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 public final class CompositeInteractionHandler {
     private CompositeInteractionHandler() {}
 
-    public static void initialize() {
-        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+    public static InteractionResult useBlock(net.minecraft.world.entity.player.Player player,
+                                             net.minecraft.world.level.Level level,
+                                             net.minecraft.world.InteractionHand hand,
+                                             net.minecraft.world.phys.BlockHitResult hit) {
             var compositePos = hit.getBlockPos();
             var clickedState = level.getBlockState(compositePos);
             var clickedDoorTop = clickedState.getBlock() instanceof DoorBlock
@@ -96,7 +97,6 @@ public final class CompositeInteractionHandler {
                 updateDoorTop(level, compositePos.above(), state, !open, state.getValue(BlockStateProperties.POWERED));
             }
             return InteractionResult.SUCCESS_SERVER;
-        });
     }
 
     private static boolean isDirectlyUsable(net.minecraft.world.level.block.state.BlockState state) {

@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
 
-public final class CompositeBlockEntity extends BlockEntity {
+public class CompositeBlockEntity extends BlockEntity {
     private final PartContainer parts = new PartContainer();
     private final CompositeGeometryCache geometry = new CompositeGeometryCache();
     private long revision;

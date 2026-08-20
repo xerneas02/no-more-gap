@@ -2,8 +2,8 @@ package fr.xerneas02.nomoregap;
 
 import fr.xerneas02.nomoregap.block.CompositeBlock;
 import fr.xerneas02.nomoregap.block.CompositeProxyBlock;
-import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
-import fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity;
+import fr.xerneas02.nomoregap.block.entity.NeoForgeCompositeBlockEntity;
+import fr.xerneas02.nomoregap.block.entity.NeoForgeCompositeProxyBlockEntity;
 import fr.xerneas02.nomoregap.config.NoMoreGapConfig;
 import fr.xerneas02.nomoregap.lava.LavaLoggingRules;
 import fr.xerneas02.nomoregap.registry.ModBlockEntities;
@@ -45,9 +45,9 @@ public final class NeoForgeRegistries {
             registry.register(NoMoreGap.id("composite"), ModItems.COMPOSITE);
         });
         event.register(Registries.BLOCK_ENTITY_TYPE, registry -> {
-            ModBlockEntities.COMPOSITE = new BlockEntityType<>(CompositeBlockEntity::new, Set.of(ModBlocks.COMPOSITE));
+            ModBlockEntities.COMPOSITE = new BlockEntityType<>(NeoForgeCompositeBlockEntity::new, Set.of(ModBlocks.COMPOSITE));
             registry.register(NoMoreGap.id("composite"), ModBlockEntities.COMPOSITE);
-            ModBlockEntities.COMPOSITE_PROXY = new BlockEntityType<>(CompositeProxyBlockEntity::new, Set.of(ModBlocks.COMPOSITE_PROXY));
+            ModBlockEntities.COMPOSITE_PROXY = new BlockEntityType<>(NeoForgeCompositeProxyBlockEntity::new, Set.of(ModBlocks.COMPOSITE_PROXY));
             registry.register(NoMoreGap.id("composite_proxy"), ModBlockEntities.COMPOSITE_PROXY);
         });
         event.register(Registries.FEATURE, registry ->

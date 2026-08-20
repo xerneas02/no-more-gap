@@ -33,6 +33,9 @@ public final class CompositeChunkModel implements BlockStateModel {
         return part.flags() != LavaLoggingReactions.FORMED_ROCK;
     }
 
+    public static boolean hasChunkGeometry(BlockPos pos) { return true; }
+    public static boolean hasChunkGeometry(long pos) { return true; }
+
     @Override public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state,
                                     RandomSource random, Predicate<Direction> cullTest) {
         if (!(((FabricBlockGetter) level).getBlockEntityRenderData(pos) instanceof CompositeRenderData data)) return;

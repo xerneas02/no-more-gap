@@ -55,6 +55,8 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
             }
         }
         for (int i = 0; i < state.count; i++) {
+            state.chunkRendered[i] = CompositeChunkModel.isChunkRendered(state.parts[i])
+                    && CompositeChunkModel.hasChunkGeometry(state.ownerPositions[i]);
             state.lights[i] = state.lightCoords;
             state.yScale[i] = verticalScale(entity, state.parts[i]);
         }
@@ -69,7 +71,13 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
             int i = state.count++;
             state.partIds[i] = part.id();
             state.parts[i] = part;
-            state.chunkRendered[i] = isRenderedInChunk(entity, part);
+            int unit = NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
+            state.ownerPositions[i] = entity.getBlockPos().offset(
+                    Math.floorDiv(part.transform().x().units(), unit),
+                    Math.floorDiv(part.transform().y().units(), unit),
+                    Math.floorDiv(part.transform().z().units(), unit)).asLong();
+            state.chunkRendered[i] = CompositeChunkModel.isChunkRendered(part)
+                    && CompositeChunkModel.hasChunkGeometry(state.ownerPositions[i]);
             state.blockStates[i] = part.state();
             resolver.update(state.models[i], part.state(), displayContext);
             state.breakModels[i] = net.minecraft.client.Minecraft.getInstance().getModelManager()
@@ -149,9 +157,9 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
                 Math.floorDiv(part.transform().y().units(), unit),
                 Math.floorDiv(part.transform().z().units(), unit));
         var ownerEntity = entity.getLevel().getBlockEntity(owner);
-        return ownerEntity == entity
+        return CompositeChunkModel.hasChunkGeometry(owner) && (ownerEntity == entity
                 || ownerEntity instanceof fr.xerneas02.nomoregap.block.entity.CompositeProxyBlockEntity proxy
-                && proxy.anchor().equals(entity.getBlockPos());
+                && proxy.anchor().equals(entity.getBlockPos()));
     }
 
     private static float verticalScale(CompositeBlockEntity entity,
@@ -185,6 +193,7 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
         private final fr.xerneas02.nomoregap.part.PartInstance[] parts = new fr.xerneas02.nomoregap.part.PartInstance[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final AABB[] partBounds = new AABB[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] partIds = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final long[] ownerPositions = new long[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] x = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] y = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] z = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];

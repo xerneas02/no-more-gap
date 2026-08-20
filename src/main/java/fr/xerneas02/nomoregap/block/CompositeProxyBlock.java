@@ -24,7 +24,9 @@ public final class CompositeProxyBlock extends BaseEntityBlock {
 
     public CompositeProxyBlock(BlockBehaviour.Properties properties) { super(properties); }
     @Override protected MapCodec<? extends BaseEntityBlock> codec() { return CODEC; }
-    @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new CompositeProxyBlockEntity(pos, state); }
+    @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return fr.xerneas02.nomoregap.registry.ModBlockEntities.COMPOSITE_PROXY.create(pos, state);
+    }
     @Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
     @Override protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         if (!(world.getBlockEntity(pos) instanceof CompositeProxyBlockEntity proxy)

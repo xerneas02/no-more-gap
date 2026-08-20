@@ -45,7 +45,9 @@ public final class CompositeBlock extends BaseEntityBlock {
     @Override protected net.minecraft.world.level.block.RenderShape getRenderShape(BlockState state) {
         return net.minecraft.world.level.block.RenderShape.MODEL;
     }
-    @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new CompositeBlockEntity(pos, state); }
+    @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return fr.xerneas02.nomoregap.registry.ModBlockEntities.COMPOSITE.create(pos, state);
+    }
 
     @Override protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         if (!(world.getBlockEntity(pos) instanceof CompositeBlockEntity composite) || composite.parts().isEmpty()) {

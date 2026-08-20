@@ -9,13 +9,36 @@ base.archivesName = archives_base_name
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(Integer.parseInt(java_version))
 
+// Game tests using the NeoForge test framework. Declared before the neoForge
+// block so the mod can reference the source set; the production jar keeps
+// using the main sources only.
+sourceSets {
+    gametest {
+        java { srcDir 'src/gametest/java' }
+        resources { srcDir 'src/gametest/resources' }
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
 neoForge {
     version = neo_version
     runs {
         client { client() }
         server { server(); programArgument '--nogui' }
+        // Vanilla-style game test server, driven by the NeoForge test framework
+        // (@ForEachTest + @GameTest). It shuts down after running the tests and
+        // fails the build when a required test fails.
+        gameTestServer { type = 'gameTestServer' }
     }
-    mods { no_more_gap { sourceSet sourceSets.main } }
+    mods {
+        no_more_gap {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.gametest
+        }
+    }
     unitTest {
         enable()
         testedMod = mods.no_more_gap
@@ -63,6 +86,13 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:6.0.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // NeoForge's test framework: @ForEachTest / @GameTest annotations and the
+    // game test server run (testLibraries of the NeoForge userdev config).
+    testImplementation "net.neoforged:testframework:${neo_version}"
+    gametestImplementation "net.neoforged:testframework:${neo_version}"
+    // The game test server run loads the test framework as a mod, so it must
+    // be on the project runtime classpath.
+    implementation "net.neoforged:testframework:${neo_version}"
 }
 
 tasks.withType(JavaCompile).configureEach {

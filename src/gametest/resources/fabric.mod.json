@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "no-more-gap-test",
+  "version": "1.0.0",
+  "name": "No More Gap Tests",
+  "description": "Game tests for the No More Gap mod.",
+  "authors": ["xerneas02"],
+  "license": "GPL-3.0-only",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "fr.xerneas02.nomoregap.gametest.PlacementGameTests",
+      "fr.xerneas02.nomoregap.gametest.RemovalGameTests",
+      "fr.xerneas02.nomoregap.gametest.DoorGameTests",
+      "fr.xerneas02.nomoregap.gametest.PersistenceGameTests",
+      "fr.xerneas02.nomoregap.gametest.ProxyGameTests",
+      "fr.xerneas02.nomoregap.gametest.SnowGameTests",
+      "fr.xerneas02.nomoregap.gametest.FluidGameTests",
+      "fr.xerneas02.nomoregap.gametest.NeighborGameTests"
+    ]
+  },
+  "depends": {
+    "no_more_gap": "*",
+    "fabric-gametest-api-v1": "*",
+    "fabricloader": ">=0.19.3",
+    "minecraft": "*"
+  }
+}

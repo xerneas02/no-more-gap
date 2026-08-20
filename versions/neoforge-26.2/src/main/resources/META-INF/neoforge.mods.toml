@@ -7,7 +7,7 @@ config="no_more_gap.mixins.json"
 
 [[mods]]
 modId="no_more_gap"
-version="${file.jarVersion}"
+version="${mod_version}"
 displayName="No More Gap"
 iconFile="assets/no_more_gap/icon.png"
 authors="xerneas02"
@@ -16,13 +16,13 @@ description='''Place compatible Minecraft blocks together in the same cell.'''
 [[dependencies.no_more_gap]]
 modId="neoforge"
 type="required"
-versionRange="[26.2.0.59,)"
+versionRange="[${neo_version},)"
 ordering="NONE"
 side="BOTH"
 
 [[dependencies.no_more_gap]]
 modId="minecraft"
 type="required"
-versionRange="[26.2]"
+versionRange="[${minecraft_version}]"
 ordering="NONE"
 side="BOTH"

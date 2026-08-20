@@ -168,14 +168,15 @@ To build every Minecraft 1.21 variant on Windows:
 .\gradlew.bat -p versions\1.21 buildAllMinecraft121
 ```
 
-To build the NeoForge 26.2 port, which compiles directly against the shared `src/main` and `src/client` sources:
+To build every NeoForge 26.x port, which compiles directly against the shared `src/main` and `src/client` sources:
 
 ```powershell
-.\gradlew.bat buildNeoForge26_2
+.\gradlew.bat buildAllNeoForge26
 ```
 
-The NeoForge JAR is generated in `versions/neoforge-26.2/build/libs/`. NeoForge-specific entrypoints,
-registrations, events, metadata, and the temporary block-entity rendering fallback live only in that subproject.
+Individual tasks are `buildNeoForge26_1`, `buildNeoForge26_1_1`, `buildNeoForge26_1_2`, and
+`buildNeoForge26_2`. The JARs are generated in `versions/neoforge-26.2/build/libs/`. NeoForge-specific
+entrypoints, registrations, events, metadata, and chunk rendering live only in that subproject.
 
 The 1.21 JAR files are generated in `versions/1.21/build/libs/`.
 

@@ -50,7 +50,12 @@ sourceSets {
         }
     }
     test {
-        java.srcDir '../../src/test/java'
+        java {
+            srcDir '../../src/test/java'
+            // LoaderEnvironmentTest proves the Fabric Loader + mixins are active
+            // in the JUnit JVM; it is Fabric-specific and cannot compile here.
+            exclude '**/LoaderEnvironmentTest.java'
+        }
     }
 }
 
@@ -65,3 +70,37 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+processResources {
+    inputs.properties minecraft_version: minecraft_version, neo_version: neo_version, mod_version: mod_version
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand minecraft_version: minecraft_version, neo_version: neo_version, mod_version: mod_version
+    }
+}
+
+def neoforge26Versions = [
+        '26.1'  : '26.1.0.19-beta',
+        '26.1.1': '26.1.1.15-beta',
+        '26.1.2': '26.1.2.77',
+        '26.2'  : '26.2.0.59'
+]
+
+def neoforge26Builds = neoforge26Versions.collect { minecraftVersion, neoVersion ->
+    tasks.register("buildMinecraft${minecraftVersion.replace('.', '_')}", Exec) {
+        group = 'build'
+        description = "Builds the NeoForge port for Minecraft ${minecraftVersion}."
+        workingDir projectDir
+        commandLine file('../../gradlew.bat'), 'build', '--console=plain',
+                "-Pminecraft_version=${minecraftVersion}", "-Pneo_version=${neoVersion}",
+                "-Pmod_version=0.1.1+mc${minecraftVersion}",
+                "-Parchives_base_name=no-more-gap-neoforge-${minecraftVersion}"
+    }
+}
+neoforge26Builds.drop(1).eachWithIndex { task, index ->
+    task.configure { mustRunAfter neoforge26Builds[index] }
+}
+tasks.register('buildAllMinecraft26') {
+    group = 'build'
+    description = 'Builds NeoForge JARs for Minecraft 26.1 through 26.2.'
+    dependsOn neoforge26Builds
+}

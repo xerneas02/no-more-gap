@@ -59,6 +59,10 @@ public final class CompositeInteractionHandler {
                 level.playSound(null, compositePos, net.minecraft.sounds.SoundEvents.LEVER_CLICK,
                         net.minecraft.sounds.SoundSource.BLOCKS, .3f, powered ? .6f : .5f);
                 if (powered) fr.xerneas02.nomoregap.advancement.ModAdvancements.checkCompactCircuit(player, composite);
+                if (level.getBlockEntity(compositePos) instanceof CompositeBlockEntity after) {
+                    fr.xerneas02.nomoregap.piston.CompositePistonTrigger.tick(
+                            (net.minecraft.server.level.ServerLevel) level, compositePos, after);
+                }
                 return InteractionResult.SUCCESS_SERVER;
             }
             if (isDirectlyUsable(state)) {
@@ -77,6 +81,13 @@ public final class CompositeInteractionHandler {
                     return result.consumesAction() ? InteractionResult.SUCCESS_SERVER : InteractionResult.PASS;
                 } finally {
                     CompositeUseContext.end();
+                    // A button/lever part may have just powered (or a piston part
+                    // may be present); re-check the composite piston trigger so
+                    // the piston fires on the interaction itself.
+                    if (!level.isClientSide() && level.getBlockEntity(compositePos) instanceof CompositeBlockEntity after) {
+                        fr.xerneas02.nomoregap.piston.CompositePistonTrigger.tick(
+                                (net.minecraft.server.level.ServerLevel) level, compositePos, after);
+                    }
                 }
             }
             if (!(state.getBlock() instanceof DoorBlock) && !(state.getBlock() instanceof FenceGateBlock)

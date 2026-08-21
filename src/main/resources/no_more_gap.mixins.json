@@ -15,6 +15,7 @@
     "CompositeInteractionSetBlockMixin",
     "CompositeScheduledTickMixin",
     "CompositeProxyDestroyMixin",
+    "CompositePistonVanillaMixin",
     "BlockTickInvoker",
     "LavaLoggedDefaultStateMixin",
     "LavaLoggingReactionMixin"

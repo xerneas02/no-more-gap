@@ -103,15 +103,33 @@ public class CompositeBlockEntity extends BlockEntity {
         return true;
     }
 
+    /** Replaces the transform of one part, used by piston pushes that keep the part in the same anchor. */
+    public boolean replaceTransform(int id, fr.xerneas02.nomoregap.geometry.LocalTransform transform) {
+        var current = parts.find(id).orElse(null);
+        if (current == null) return false;
+        var replaced = new PartInstance(id, current.state(), transform, current.flags());
+        var list = new java.util.ArrayList<PartInstance>(parts.view());
+        list.replaceAll(part -> part.id() == id ? replaced : part);
+        parts.replaceAll(list);
+        changed();
+        return true;
+    }
+
     public void clearParts() {
         if (parts.isEmpty()) return;
         parts.clear();
         changed();
     }
 
-    public void replaceParts(List<PartInstance> replacement) {
+    /** Atomically replaces the part list while preserving ids and geometry. */
+    public void replaceParts(java.util.List<PartInstance> replacement) {
         parts.replaceAll(replacement);
         changed();
+    }
+
+    /** Returns the ids of all parts currently stored, for removal bookkeeping. */
+    public java.util.Set<Integer> partsRemoved() {
+        return new HashSet<>(parts.view().stream().map(PartInstance::id).toList());
     }
 
     public void beginUpdate() { updateDepth++; }
@@ -158,6 +176,10 @@ public class CompositeBlockEntity extends BlockEntity {
             }
             if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                 fr.xerneas02.nomoregap.lava.LavaLoggingReactions.tryReact(serverLevel, worldPosition);
+                // Any part mutation may change piston power; re-check the
+                // trigger so a piston part fires even if no neighbour update
+                // arrives. The trigger's own firing flag prevents re-entrancy.
+                fr.xerneas02.nomoregap.piston.CompositePistonTrigger.tick(serverLevel, worldPosition, this);
             }
         }
     }

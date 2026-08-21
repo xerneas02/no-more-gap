@@ -15,3 +15,4 @@ logs/
 Thumbs.db
 crash-reports/
 hs_err_pid*.log
+.commandcode/

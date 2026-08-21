@@ -38,6 +38,8 @@ public final class PartRaycaster {
         for (var part : composite.parts().view()) {
             if (part.state().getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE
                     || part.state().getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY) continue;
+            // Piston head parts are internal; they cannot be targeted or broken.
+            if ((part.flags() & fr.xerneas02.nomoregap.part.PartFlags.PISTON_HEAD) != 0) continue;
             var shape = ShapeTransformer.transform(
                     part.state().getShape(world, composite.getBlockPos(), CollisionContext.of(player)), part.transform());
             for (var box : shape.toAabbs()) {

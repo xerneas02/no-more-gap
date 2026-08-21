@@ -108,7 +108,12 @@ public final class CompositeBlock extends BaseEntityBlock {
                                              Block neighborBlock,
                                              net.minecraft.world.level.redstone.Orientation orientation,
                                              boolean movedByPiston) {
-        if (!level.isClientSide()) fr.xerneas02.nomoregap.interaction.CompositePartUpdater.refreshAround(level, pos);
+        if (!level.isClientSide()) {
+            fr.xerneas02.nomoregap.interaction.CompositePartUpdater.refreshAround(level, pos);
+            fr.xerneas02.nomoregap.piston.CompositePistonTrigger.tick(
+                    (net.minecraft.server.level.ServerLevel) level, pos,
+                    level.getBlockEntity(pos) instanceof CompositeBlockEntity composite ? composite : null);
+        }
     }
 
     @Override public void onExplosionHit(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos,
@@ -193,6 +198,7 @@ public final class CompositeBlock extends BaseEntityBlock {
                         ((BlockTickInvoker) part.state().getBlock()).noMoreGap$tick(part.state(), level, pos, random));
             }
         }
+        fr.xerneas02.nomoregap.piston.CompositePistonTrigger.tick(level, pos, composite);
     }
 
     @Override public void playerDestroy(Level level, Player player, BlockPos pos, BlockState state,

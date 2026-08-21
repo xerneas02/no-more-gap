@@ -16,7 +16,8 @@
       "fr.xerneas02.nomoregap.gametest.ProxyGameTests",
       "fr.xerneas02.nomoregap.gametest.SnowGameTests",
       "fr.xerneas02.nomoregap.gametest.FluidGameTests",
-      "fr.xerneas02.nomoregap.gametest.NeighborGameTests"
+      "fr.xerneas02.nomoregap.gametest.NeighborGameTests",
+      "fr.xerneas02.nomoregap.gametest.PistonGameTests"
     ]
   },
   "depends": {

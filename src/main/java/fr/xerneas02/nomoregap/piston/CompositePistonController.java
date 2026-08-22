@@ -219,14 +219,8 @@ public final class CompositePistonController {
             level.setBlockEntity(movingEntity);
             movingEntity.setChanged();
             level.sendBlockUpdated(target, movingState, movingState, Block.UPDATE_CLIENTS);
-            var players = net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(level, target);
-            fr.xerneas02.nomoregap.NoMoreGap.LOGGER.debug(
-                    "Created moving piston at {} for {} tracking clients", target, players.size());
-            for (var player : players) {
-                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
-                        new fr.xerneas02.nomoregap.network.payload.MovingPistonPayload(
-                                target, movedState, plan.direction, plan.extending));
-            }
+            fr.xerneas02.nomoregap.network.MovingPistonNetworking.send(
+                    level, target, movedState, plan.direction, plan.extending);
             level.removeBlock(source, false);
         }
     }

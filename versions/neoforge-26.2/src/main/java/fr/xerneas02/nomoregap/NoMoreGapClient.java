@@ -25,4 +25,18 @@ public final class NoMoreGapClient {
                 state.getBlock() == ModBlocks.COMPOSITE || state.getBlock() == ModBlocks.COMPOSITE_PROXY
                         ? new CompositeChunkModel(model) : model);
     }
+
+    public static void installMovingPiston(
+            fr.xerneas02.nomoregap.network.payload.MovingPistonPayload payload) {
+        var level = net.minecraft.client.Minecraft.getInstance().level;
+        if (level == null) return;
+        var movingState = net.minecraft.world.level.block.Blocks.MOVING_PISTON.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.piston.MovingPistonBlock.FACING, payload.direction())
+                .setValue(net.minecraft.world.level.block.piston.MovingPistonBlock.TYPE,
+                        net.minecraft.world.level.block.state.properties.PistonType.DEFAULT);
+        level.setBlock(payload.pos(), movingState, net.minecraft.world.level.block.Block.UPDATE_MOVE_BY_PISTON
+                | net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+        level.setBlockEntity(net.minecraft.world.level.block.piston.MovingPistonBlock.newMovingBlockEntity(
+                payload.pos(), movingState, payload.movedState(), payload.direction(), payload.extending(), false));
+    }
 }

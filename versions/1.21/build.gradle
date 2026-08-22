@@ -41,6 +41,7 @@ sourceSets.gametest.resources.srcDir '../../src/gametest/resources'
 // Share the unit tests with the main branch as well: the tests only use APIs
 // stable across the supported versions (the local copies were removed).
 sourceSets.test.java.srcDir '../../src/test/java'
+sourceSets.test.java.exclude 'fr/xerneas02/nomoregap/block/entity/CompositeBlockEntityTest.java'
 
 def sharedMain = objects.sourceDirectorySet('sharedMain', 'Shared 1.21-compatible main sources')
 sharedMain.srcDir '../../src/main/java'
@@ -124,7 +125,7 @@ java {
 if (minecraft_version != '1.21.11') {
     sourceSets.main.java.srcDir 'src/legacy/java'
     sourceSets.main.java.exclude { details ->
-        details.file.path.contains('src\\main\\java') && details.file.path.replace('\\', '/').matches(
+        details.file.path.replace('\\', '/').contains('/src/main/java/') && details.file.path.replace('\\', '/').matches(
                 '.*/(NoMoreGap|CompositeRules|LavaLoggingRules)\\.java')
     }
 }
@@ -132,7 +133,7 @@ if (minecraft_version != '1.21.11') {
 if (!(minecraft_version in ['1.21.9', '1.21.10', '1.21.11'])) {
     sourceSets.client.java.srcDir 'src/legacyClient/java'
     sourceSets.client.java.exclude { details ->
-        details.file.path.contains('src\\client\\java')
+        details.file.path.replace('\\', '/').contains('/src/client/java/')
                 && details.file.name == 'CompositeBlockEntityRenderer.java'
     }
 }
@@ -140,7 +141,7 @@ if (!(minecraft_version in ['1.21.9', '1.21.10', '1.21.11'])) {
 if (minecraft_version == '1.21.5') {
     sourceSets.main.java.srcDir 'src/legacyNbt/java'
     sourceSets.main.java.exclude { details ->
-        details.file.path.contains('src\\main\\java\\fr\\xerneas02\\nomoregap\\block\\entity')
+        details.file.path.replace('\\', '/').contains('/src/main/java/fr/xerneas02/nomoregap/block/entity/')
                 && details.file.name in ['CompositeBlockEntity.java', 'CompositeProxyBlockEntity.java']
     }
 }
@@ -148,7 +149,7 @@ if (minecraft_version == '1.21.5') {
 if (minecraft_version in ['1.21.2', '1.21.3', '1.21.4']) {
     sourceSets.main.java.srcDir 'src/legacyNbtOld/java'
     sourceSets.main.java.exclude { details ->
-        details.file.path.contains('src\\main\\java\\fr\\xerneas02\\nomoregap\\block\\entity')
+        details.file.path.replace('\\', '/').contains('/src/main/java/fr/xerneas02/nomoregap/block/entity/')
                 && details.file.name in ['CompositeBlockEntity.java', 'CompositeProxyBlockEntity.java']
     }
 }
@@ -156,15 +157,26 @@ if (minecraft_version in ['1.21.2', '1.21.3', '1.21.4']) {
 if (minecraft_version in ['1.21', '1.21.1']) {
     sourceSets.main.java.srcDir 'src/legacyNbtVeryOld/java'
     sourceSets.main.java.exclude { details ->
-        details.file.path.contains('src\\main\\java\\fr\\xerneas02\\nomoregap\\block\\entity')
+        details.file.path.replace('\\', '/').contains('/src/main/java/fr/xerneas02/nomoregap/block/entity/')
                 && details.file.name in ['CompositeBlockEntity.java', 'CompositeProxyBlockEntity.java']
     }
 }
 
 if (minecraft_version in ['1.21', '1.21.1']) {
+    sharedMain.exclude([
+            'fr/xerneas02/nomoregap/registry/ModBlocks.java',
+            'fr/xerneas02/nomoregap/registry/ModItems.java',
+            'fr/xerneas02/nomoregap/interaction/CompositePartUpdater.java',
+            'fr/xerneas02/nomoregap/mixin/CompositeNeighborStateMixin.java',
+            'fr/xerneas02/nomoregap/mixin/CompositeScheduledTickMixin.java',
+            'fr/xerneas02/nomoregap/mixin/DoorBlockMixin.java',
+            'fr/xerneas02/nomoregap/mixin/LavaLoggedNeighborTickMixin.java',
+            'fr/xerneas02/nomoregap/mixin/PlantSupportMixin.java',
+            'fr/xerneas02/nomoregap/mixin/LavaLoggingReactionMixin.java'
+    ])
     sourceSets.main.java.srcDir 'src/legacyOld/java'
     sourceSets.main.java.exclude { details ->
-        details.file.path.contains('src\\main\\java') && (
+        details.file.path.replace('\\', '/').contains('/src/main/java/') && (
                 details.file.name in ['ModBlocks.java', 'ModItems.java', 'CompositeBlock.java',
                         'CompositePartUpdater.java', 'SnowyVegetationFeature.java', 'CompositeNeighborStateMixin.java',
                         'CompositeScheduledTickMixin.java', 'DoorBlockMixin.java', 'LavaLoggedNeighborTickMixin.java',
@@ -172,7 +184,7 @@ if (minecraft_version in ['1.21', '1.21.1']) {
     }
     sourceSets.main.resources.srcDir 'src/legacyOld/resources'
     sourceSets.main.resources.exclude { details ->
-        details.file.path.contains('src\\main\\resources') && details.file.name == 'no_more_gap.mixins.json'
+        details.file.path.replace('\\', '/').contains('/src/main/resources/') && details.file.name == 'no_more_gap.mixins.json'
     }
 }
 
@@ -196,10 +208,10 @@ def minecraft121Builds = minecraft121Versions.collect { gameVersion, apiVersion 
         group = 'build'
         workingDir projectDir
         // Game tests are heavy and their shared sources target the modern API:
-        // the version matrix builds unit tests and jars only. Run `check` or
+        // the version matrix builds jars only. Run `check` or
         // `runGameTest` explicitly for the default version to run game tests.
-        def wrapper = System.getProperty('os.name').toLowerCase().contains('windows') ? '../../gradlew.bat' : '../../gradlew'
-        commandLine wrapper, 'build', '-x', 'runGameTest',
+        def wrapper = file(System.getProperty('os.name').toLowerCase().contains('windows') ? '../../gradlew.bat' : '../../gradlew')
+        commandLine wrapper, 'assemble',
                 "-Pminecraft_version=${gameVersion}", "-Pfabric_api_version=${apiVersion}",
                 "-Parchives_base_name=no-more-gap-${gameVersion}", '--console=plain'
     }

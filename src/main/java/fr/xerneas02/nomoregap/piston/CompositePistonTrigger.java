@@ -14,8 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.PistonType;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
 
 /**
  * Detects powered composite piston parts and fires the resolver/controller
@@ -28,7 +27,6 @@ import java.util.Map;
  * and restores the body for every piston (normal pistons simply do not pull).
  */
 public final class CompositePistonTrigger {
-    private static final Map<BlockPos, Boolean> lastPower = new HashMap<>();
     private static boolean firing;
 
     private CompositePistonTrigger() {
@@ -36,18 +34,17 @@ public final class CompositePistonTrigger {
 
     public static void tick(ServerLevel level, BlockPos anchor, CompositeBlockEntity composite) {
         if (level.isClientSide() || composite == null || firing) return;
-        boolean hasPiston = false;
+        var pistonIds = new HashSet<Integer>();
         // Iterate a copy: fire() mutates the composite (replacePart / addPart ->
         // changed -> refreshProxies -> setBlock -> neighborChanged), which
         // would otherwise throw ConcurrentModificationException.
         for (var part : java.util.List.copyOf(composite.parts().view())) {
             if (!isPistonPart(part)) continue;
-            hasPiston = true;
+            pistonIds.add(part.id());
             var worldPos = partWorldPos(anchor, part.transform());
             boolean powered = isPowered(level, worldPos, part) || internallyPowered(composite, part);
-            boolean previous = lastPower.getOrDefault(worldPos, false);
-            if (powered != previous) {
-                lastPower.put(worldPos, powered);
+            boolean extended = part.state().getValue(PistonBaseBlock.EXTENDED);
+            if (composite.pistonPowerChanged(part.id(), powered, extended)) {
                 if (powered) {
                     fire(level, anchor, composite, part);
                 } else {
@@ -55,12 +52,7 @@ public final class CompositePistonTrigger {
                 }
             }
         }
-        // Keep polling while a piston part exists: neighbour updates can arrive
-        // before the signal is fully computed, so the composite re-checks on a
-        // scheduled tick until the piston is gone.
-        if (hasPiston) {
-            level.scheduleTick(anchor, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE, 1);
-        }
+        composite.retainPistonPower(pistonIds);
     }
 
     public static void fire(ServerLevel level, BlockPos anchor, CompositeBlockEntity composite, PartInstance part) {
@@ -74,7 +66,7 @@ public final class CompositePistonTrigger {
             // If the push is blocked (immovable block, depth limit, ...), the
             // piston must not extend at all — mirroring vanilla.
             if (plan.blocked) return;
-            CompositePistonController.apply(level, plan);
+            if (!CompositePistonController.apply(level, plan)) return;
             if (!(level.getBlockEntity(anchor) instanceof CompositeBlockEntity current)
                     || current.parts().find(part.id()).map(p -> !p.state().hasProperty(PistonBaseBlock.EXTENDED)).orElse(true)) {
                 return;
@@ -109,9 +101,13 @@ public final class CompositePistonTrigger {
             // Remove the head BEFORE applying the retraction so the head cell
             // (and its proxy) is free for a pulled block.
             if (!(level.getBlockEntity(anchor) instanceof CompositeBlockEntity current)) return;
-            removePistonHead(current, direction);
-            if (!plan.blocked) {
-                CompositePistonController.apply(level, plan);
+            var removedHead = removePistonHead(current, part, direction);
+            if (!plan.blocked && !CompositePistonController.apply(level, plan)) {
+                if (removedHead != null) {
+                    var restored = current.addPart(removedHead.state(), removedHead.transform(), removedHead.flags());
+                    current.setPistonHeadOwner(restored.id(), part.id());
+                }
+                return;
             }
             if (current.parts().find(part.id()).map(p -> !p.state().hasProperty(PistonBaseBlock.EXTENDED)).orElse(true)) {
                 return;
@@ -126,33 +122,44 @@ public final class CompositePistonTrigger {
     /** Adds the head part in the cell one block ahead of the piston body. */
     private static void addPistonHead(CompositeBlockEntity composite, PartInstance pistonPart,
                                       Direction direction, boolean sticky) {
-        var unit = fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK;
-        var headTransform = new LocalTransform(
-                pistonPart.transform().x().add(FixedPoint.fromDouble(direction.getStepX())),
-                pistonPart.transform().y().add(FixedPoint.fromDouble(direction.getStepY())),
-                pistonPart.transform().z().add(FixedPoint.fromDouble(direction.getStepZ())),
-                pistonPart.transform().quarterTurns());
+        var headTransform = pistonHeadTransform(pistonPart, direction);
         // If a head already exists (re-fire), do not duplicate it.
-        if (composite.parts().view().stream().anyMatch(p ->
-                (p.flags() & PartFlags.PISTON_HEAD) != 0
-                        && p.transform().equals(headTransform))) {
-            return;
+        for (var part : composite.parts().view()) {
+            if ((part.flags() & PartFlags.PISTON_HEAD) != 0 && part.transform().equals(headTransform)) {
+                if (!composite.hasPistonHeadOwner(part.id())) {
+                    composite.setPistonHeadOwner(part.id(), pistonPart.id());
+                }
+                return;
+            }
         }
         var headState = Blocks.PISTON_HEAD.defaultBlockState()
                 .setValue(BlockStateProperties.FACING, direction)
                 .setValue(BlockStateProperties.SHORT, false)
                 .setValue(BlockStateProperties.PISTON_TYPE, sticky ? PistonType.STICKY : PistonType.DEFAULT);
-        composite.addPart(headState, headTransform, PartFlags.PISTON_HEAD);
+        var head = composite.addPart(headState, headTransform, PartFlags.PISTON_HEAD);
+        composite.setPistonHeadOwner(head.id(), pistonPart.id());
     }
 
-    /** Removes the head part(s) of a piston pointing in {@code direction}. */
-    private static void removePistonHead(CompositeBlockEntity composite, Direction direction) {
+    /** Removes only the head created by this piston part. */
+    private static PartInstance removePistonHead(CompositeBlockEntity composite, PartInstance pistonPart, Direction direction) {
+        var headTransform = pistonHeadTransform(pistonPart, direction);
         for (var part : java.util.List.copyOf(composite.parts().view())) {
             if ((part.flags() & PartFlags.PISTON_HEAD) != 0
-                    && part.state().getValue(BlockStateProperties.FACING) == direction) {
+                    && (composite.isPistonHeadOwnedBy(part.id(), pistonPart.id())
+                    || (!composite.hasPistonHeadOwner(part.id()) && part.transform().equals(headTransform)))) {
                 composite.removePart(part.id());
+                return part;
             }
         }
+        return null;
+    }
+
+    private static LocalTransform pistonHeadTransform(PartInstance pistonPart, Direction direction) {
+        return new LocalTransform(
+                pistonPart.transform().x().add(FixedPoint.fromDouble(direction.getStepX())),
+                pistonPart.transform().y().add(FixedPoint.fromDouble(direction.getStepY())),
+                pistonPart.transform().z().add(FixedPoint.fromDouble(direction.getStepZ())),
+                pistonPart.transform().quarterTurns());
     }
 
     private static boolean isPistonPart(PartInstance part) {

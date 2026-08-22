@@ -30,20 +30,8 @@ public final class CreativeCompositeBreakingHandler {
                     .flatMap(hit -> targetComposite.parts().find(hit.partId()));
             if (target.isEmpty()) return InteractionResult.PASS;
             if (level.isClientSide()) return InteractionResult.SUCCESS;
-            var targetPart = target.get();
-            var sound = targetPart.state().getSoundType();
-            level.playSound(null, anchorPos.getX() + 0.5 + targetPart.transform().xDouble(),
-                    anchorPos.getY() + 0.5 + targetPart.transform().yDouble(),
-                    anchorPos.getZ() + 0.5 + targetPart.transform().zDouble(), sound.getBreakSound(), net.minecraft.sounds.SoundSource.BLOCKS,
-                    (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
-            if (target.get().state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock) {
-                var doorParts = targetComposite.parts().view().stream()
-                        .filter(part -> part.state().getBlock() == target.get().state().getBlock())
-                        .map(fr.xerneas02.nomoregap.part.PartInstance::id).collect(java.util.stream.Collectors.toSet());
-                CompositeBlock.restoreAfterRemoval(level, anchorPos, targetComposite, doorParts);
-            } else {
-                CompositeBlock.restoreAfterRemoval(level, anchorPos, targetComposite, target.get().id());
-            }
+            CompositeBlock.destroyPart(level, player, anchorPos, targetComposite, target.get().id(),
+                    player.getMainHandItem().copy());
             return InteractionResult.SUCCESS_SERVER;
     }
 }

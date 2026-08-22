@@ -292,6 +292,9 @@ public final class CompositeBlock extends BaseEntityBlock {
         var removed = targetPart.id() == sourcePartId(composite.parts().view())
                 ? composite.parts().view().stream().map(PartInstance::id).collect(java.util.stream.Collectors.toSet())
                 : new java.util.HashSet<>(directlyRemoved);
+        composite.parts().view().stream()
+                .filter(part -> composite.isPistonHeadOwnedBy(part.id(), targetPart.id()))
+                .map(PartInstance::id).forEach(removed::add);
         if (isFootCover(targetPart)) {
             for (boolean changed = true; changed;) {
                 changed = composite.parts().view().stream()

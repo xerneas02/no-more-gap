@@ -17,9 +17,8 @@ import java.util.Map;
 
 /**
  * Applies a {@link CompositePistonMovePlan} to the world. The operation is
- * transactional with respect to parts: the complete plan is validated before
- * the first mutation, and every cell reservation is checked before anything is
- * written, so a blocked destination leaves the world untouched.
+ * pre-validates its complete plan before changing the world, so a blocked
+ * destination leaves the world untouched.
  */
 public final class CompositePistonController {
     private CompositePistonController() {
@@ -27,7 +26,8 @@ public final class CompositePistonController {
 
     public static boolean apply(Level level, CompositePistonMovePlan plan) {
         if (!(level instanceof net.minecraft.server.level.ServerLevel server)) return false;
-        if (plan.partMoves.isEmpty() && plan.vanillaBlocksToPush.isEmpty() && plan.blocksToDestroy.isEmpty()) {
+        if (plan.partMoves.isEmpty() && plan.vanillaBlocksToPush.isEmpty()
+                && plan.blocksToDestroy.isEmpty() && plan.partsToDestroy.isEmpty()) {
             return true;
         }
 
@@ -68,6 +68,23 @@ public final class CompositePistonController {
                 currentIds.put(anchor, new java.util.HashSet<>());
             }
             currentIds.get(anchor).add(move.partId());
+        }
+        for (var entry : currentIds.entrySet()) {
+            var source = currentParts.get(entry.getKey());
+            for (var id : entry.getValue()) {
+                if (source.stream().noneMatch(part -> part.id() == id)) return false;
+            }
+        }
+        // The resolver may traverse proxies, but a composite anchor cannot be
+        // moved into one: it has no composite entity to receive the parts.
+        // Reject this before the first removal, preserving the all-or-nothing
+        // contract for plans whose world state changed since resolution.
+        for (var move : plan.partMoves) {
+            if (move.toAnchor().equals(move.fromAnchor())) continue;
+            var destination = level.getBlockState(move.toAnchor());
+            if (destination.isAir() || level.getBlockEntity(move.toAnchor()) instanceof CompositeBlockEntity
+                    || currentParts.containsKey(move.toAnchor())) continue;
+            return false;
         }
 
         // ---- 3. Verify that the destination composite can accept the parts --
@@ -115,12 +132,20 @@ public final class CompositePistonController {
             reservationOwners.remove(destroy);
         }
 
+        // Destroy first: neighbour updates from moved blocks must not remove a
+        // fragile block before destroyBlock gets a chance to create its drops.
+        for (var destroy : plan.blocksToDestroy) {
+            level.destroyBlock(destroy, true);
+        }
+
         // ---- 5. Apply part moves -------------------------------------------
         // Apply composite moves furthest-first so a composite arrives in a cell
         // that was just vacated by the next composite in the line. Moves that
         // stay inside their own composite are independent and can run in any
         // order.
         var orderedMoves = new ArrayList<>(plan.partMoves);
+        var movedParts = new HashMap<CompositePistonMovePlan.PartRef, CompositePistonMovePlan.PartRef>();
+        var movedHeadOwners = new HashMap<CompositePistonMovePlan.PartRef, Integer>();
         orderedMoves.sort((a, b) -> {
             boolean aWhole = !a.toAnchor().equals(a.fromAnchor());
             boolean bWhole = !b.toAnchor().equals(b.fromAnchor());
@@ -132,14 +157,19 @@ public final class CompositePistonController {
         for (var move : orderedMoves) {
             var fromAnchor = move.fromAnchor();
             var toAnchor = move.toAnchor();
-            if (!(level.getBlockEntity(fromAnchor) instanceof CompositeBlockEntity fromComposite)) continue;
+            var sourceRef = new CompositePistonMovePlan.PartRef(fromAnchor, move.partId());
+            if (!(level.getBlockEntity(fromAnchor) instanceof CompositeBlockEntity fromComposite)) {
+                throw new IllegalStateException("Piston plan source disappeared after validation");
+            }
             if (toAnchor.equals(fromAnchor)) {
                 // The part stays in the same composite: just update transform.
                 fromComposite.replaceTransform(move.partId(), move.toTransform());
+                movedParts.put(sourceRef, sourceRef);
                 continue;
             }
             var part = fromComposite.parts().find(move.partId()).orElse(null);
-            if (part == null) return false;
+            if (part == null) throw new IllegalStateException("Piston part disappeared after validation");
+            int pistonHeadOwner = fromComposite.pistonHeadOwner(move.partId());
             // Remove from source.
             fromComposite.removePart(move.partId());
             if (fromComposite.parts().isEmpty()) {
@@ -152,12 +182,24 @@ public final class CompositePistonController {
             } else if (level.getBlockState(toAnchor).isAir()) {
                 level.setBlock(toAnchor, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE.defaultBlockState(),
                         Block.UPDATE_ALL);
-                if (!(level.getBlockEntity(toAnchor) instanceof CompositeBlockEntity created)) return false;
+                if (!(level.getBlockEntity(toAnchor) instanceof CompositeBlockEntity created)) {
+                    throw new IllegalStateException("Could not create piston move destination");
+                }
                 toComposite = created;
             } else {
-                return false;
+                throw new IllegalStateException("Piston destination changed after validation");
             }
-            toComposite.addPart(part.state(), move.toTransform(), part.flags());
+            var movedPart = toComposite.addPart(part.state(), move.toTransform(), part.flags());
+            movedParts.put(sourceRef, new CompositePistonMovePlan.PartRef(toAnchor, movedPart.id()));
+            if (pistonHeadOwner >= 0) movedHeadOwners.put(sourceRef, pistonHeadOwner);
+        }
+        for (var entry : movedHeadOwners.entrySet()) {
+            var movedHead = movedParts.get(entry.getKey());
+            var movedPiston = movedParts.get(new CompositePistonMovePlan.PartRef(entry.getKey().anchor(), entry.getValue()));
+            if (movedHead != null && movedPiston != null && movedHead.anchor().equals(movedPiston.anchor())
+                    && level.getBlockEntity(movedHead.anchor()) instanceof CompositeBlockEntity composite) {
+                composite.setPistonHeadOwner(movedHead.partId(), movedPiston.partId());
+            }
         }
 
         // ---- 6. Apply vanilla block moves (furthest first) -----------------
@@ -193,23 +235,10 @@ public final class CompositePistonController {
             level.removeBlock(source, false);
         }
 
-        // ---- 7. Destroy blocks ----------------------------------------------
-        for (var destroy : plan.blocksToDestroy) {
-            level.destroyBlock(destroy, true);
-        }
-
         // ---- 7b. Destroy parts (PushReaction.DESTROY) -----------------------
-        if (!plan.partsToDestroy.isEmpty()) {
-            var affectedAnchors = new java.util.HashSet<BlockPos>();
-            for (var id : plan.partsToDestroy) {
-                for (var move : plan.partMoves) {
-                    affectedAnchors.add(move.fromAnchor());
-                }
-                for (var anchor : affectedAnchors) {
-                    if (level.getBlockEntity(anchor) instanceof CompositeBlockEntity composite) {
-                        composite.removePart(id);
-                    }
-                }
+        for (var part : plan.partsToDestroy) {
+            if (level.getBlockEntity(part.anchor()) instanceof CompositeBlockEntity composite) {
+                composite.removePart(part.partId());
             }
         }
 

@@ -39,6 +39,10 @@ public class CompositeBlockEntity extends BlockEntity {
     private boolean updatePending;
     private final java.util.Map<Long, Set<Integer>> scheduledParts = new HashMap<>();
     private final java.util.Map<Integer, Integer> comparatorOutputs = new HashMap<>();
+    /** Transient piston edge state; persisted extension state remains the source of truth after reload. */
+    private final java.util.Map<Integer, Boolean> pistonPower = new HashMap<>();
+    /** Server-side link between a piston-head part and the piston part that created it. */
+    private final java.util.Map<Integer, Integer> pistonHeadOwners = new HashMap<>();
 
     public CompositeBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.COMPOSITE, pos, state); }
 
@@ -69,6 +73,45 @@ public class CompositeBlockEntity extends BlockEntity {
         changed();
     }
 
+    public boolean pistonPowerChanged(int id, boolean powered, boolean initialPower) {
+        var previous = pistonPower.put(id, powered);
+        return previous == null ? powered != initialPower : powered != previous;
+    }
+
+    public void retainPistonPower(Set<Integer> ids) {
+        pistonPower.keySet().retainAll(ids);
+    }
+
+    public void setPistonHeadOwner(int headId, int pistonId) {
+        pistonHeadOwners.put(headId, pistonId);
+        setChanged();
+    }
+
+    public boolean isPistonHeadOwnedBy(int headId, int pistonId) {
+        return pistonHeadOwner(headId) == pistonId;
+    }
+
+    public boolean hasPistonHeadOwner(int headId) {
+        return pistonHeadOwner(headId) >= 0;
+    }
+
+    public int pistonHeadOwner(int headId) {
+        var explicit = pistonHeadOwners.get(headId);
+        if (explicit != null) return explicit;
+        var head = parts.find(headId).orElse(null);
+        if (head == null || (head.flags() & fr.xerneas02.nomoregap.part.PartFlags.PISTON_HEAD) == 0) return -1;
+        for (var piston : parts.view()) {
+            if (!(piston.state().getBlock() instanceof net.minecraft.world.level.block.piston.PistonBaseBlock)) continue;
+            var facing = piston.state().getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING);
+            if (head.transform().x().units() == piston.transform().x().units() + facing.getStepX() * fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK
+                    && head.transform().y().units() == piston.transform().y().units() + facing.getStepY() * fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK
+                    && head.transform().z().units() == piston.transform().z().units() + facing.getStepZ() * fr.xerneas02.nomoregap.util.NoMoreGapLimits.FIXED_UNITS_PER_BLOCK) {
+                return piston.id();
+            }
+        }
+        return -1;
+    }
+
     public CompositeGeometryCache geometry(BlockGetter world, CollisionContext context) {
         if (!geometryDirty && geometry.isValid()) return geometry;
         VoxelShape collision = Shapes.empty(), selection = Shapes.empty(), occlusion = Shapes.empty();
@@ -93,6 +136,8 @@ public class CompositeBlockEntity extends BlockEntity {
     public boolean removePart(int id) {
         if (!parts.remove(id)) return false;
         comparatorOutputs.remove(id);
+        pistonPower.remove(id);
+        pistonHeadOwners.remove(id);
         changed();
         return true;
     }
@@ -118,12 +163,14 @@ public class CompositeBlockEntity extends BlockEntity {
     public void clearParts() {
         if (parts.isEmpty()) return;
         parts.clear();
+        pistonHeadOwners.clear();
         changed();
     }
 
     /** Atomically replaces the part list while preserving ids and geometry. */
     public void replaceParts(java.util.List<PartInstance> replacement) {
         parts.replaceAll(replacement);
+        pistonHeadOwners.keySet().removeIf(id -> replacement.stream().noneMatch(part -> part.id() == id));
         changed();
     }
 
@@ -290,6 +337,7 @@ public class CompositeBlockEntity extends BlockEntity {
         super.saveAdditional(output);
         output.putLong("revision", revision);
         comparatorOutputs.forEach((id, value) -> output.putInt("comparator." + id, value));
+        pistonHeadOwners.forEach((headId, pistonId) -> output.putInt("pistonHeadOwner." + headId, pistonId));
         var list = output.list("parts", PartInstance.CODEC);
         parts.view().forEach(list::add);
     }
@@ -298,6 +346,7 @@ public class CompositeBlockEntity extends BlockEntity {
         super.loadAdditional(input);
         parts.clear();
         comparatorOutputs.clear();
+        pistonHeadOwners.clear();
         revision = Math.max(0, input.getLongOr("revision", 0));
         for (var part : input.listOrEmpty("parts", PartInstance.CODEC)) {
             if (isInternalPart(part.state())) {
@@ -312,6 +361,8 @@ public class CompositeBlockEntity extends BlockEntity {
         for (var part : parts.view()) {
             int output = input.getIntOr("comparator." + part.id(), 0);
             if (output != 0) comparatorOutputs.put(part.id(), output);
+            int pistonOwner = input.getIntOr("pistonHeadOwner." + part.id(), -1);
+            if (pistonOwner >= 0) pistonHeadOwners.put(part.id(), pistonOwner);
         }
         geometryDirty = true;
         geometry.invalidate();

@@ -58,6 +58,20 @@ public class PistonGameTests extends GameTestBase {
                 .anyMatch(p -> (p.flags() & fr.xerneas02.nomoregap.part.PartFlags.PISTON_HEAD) != 0);
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void legacyPistonHeadFindsItsOwner(GameTestHelper helper) {
+        BlockPos anchor = helper.absolutePos(new BlockPos(2, 2, 2));
+        var body = piston(0, Direction.EAST, false, 0, 0, 0);
+        var head = new PartInstance(1, Blocks.PISTON_HEAD.defaultBlockState()
+                .setValue(BlockStateProperties.FACING, Direction.EAST), t(1, 0, 0),
+                fr.xerneas02.nomoregap.part.PartFlags.PISTON_HEAD);
+        var composite = createComposite(helper, anchor, List.of(body, head));
+
+        helper.assertTrue(composite.pistonHeadOwner(head.id()) == body.id(),
+                "A legacy piston head must resolve its piston owner from geometry");
+        helper.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
     public void pistonPartPushesBlockInFront(GameTestHelper helper) {
         BlockPos anchor = helper.absolutePos(new BlockPos(2, 2, 2));

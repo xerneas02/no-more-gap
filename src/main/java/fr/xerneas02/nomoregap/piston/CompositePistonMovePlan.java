@@ -21,6 +21,8 @@ public final class CompositePistonMovePlan {
     public record PartMove(int partId, BlockPos fromAnchor, LocalTransform fromTransform,
                            BlockPos toAnchor, LocalTransform toTransform) {
     }
+    public record PartRef(BlockPos anchor, int partId) {
+    }
 
     public final BlockPos pistonAnchor;
     public final int pistonPartId;
@@ -31,7 +33,7 @@ public final class CompositePistonMovePlan {
     public final List<PartMove> partMoves;
     public final List<BlockPos> vanillaBlocksToPush;
     public final List<BlockPos> blocksToDestroy;
-    public final List<Integer> partsToDestroy;
+    public final List<PartRef> partsToDestroy;
     public final Map<BlockPos, Integer> toPushIndex;
     public final BlockPos pistonDestination;
 
@@ -53,7 +55,7 @@ public final class CompositePistonMovePlan {
     CompositePistonMovePlan(BlockPos pistonAnchor, int pistonPartId, Direction direction, boolean extending,
                             boolean sticky, boolean blocked, List<PartMove> partMoves,
                             List<BlockPos> vanillaBlocksToPush, List<BlockPos> blocksToDestroy,
-                            List<Integer> partsToDestroy, BlockPos pistonDestination) {
+                            List<PartRef> partsToDestroy, BlockPos pistonDestination) {
         this.pistonAnchor = pistonAnchor;
         this.pistonPartId = pistonPartId;
         this.direction = direction;

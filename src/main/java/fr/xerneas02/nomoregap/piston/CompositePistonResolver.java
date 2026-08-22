@@ -64,7 +64,7 @@ public final class CompositePistonResolver {
     private final List<CompositePistonMovePlan.PartMove> partMoves = new ArrayList<>();
     private final List<BlockPos> vanillaBlocksToPush = new ArrayList<>();
     private final List<BlockPos> blocksToDestroy = new ArrayList<>();
-    private final List<Integer> partsToDestroy = new ArrayList<>();
+    private final List<CompositePistonMovePlan.PartRef> partsToDestroy = new ArrayList<>();
     private final Set<BlockPos> vanillaSeen = new HashSet<>();
     private final Set<PartRef> partSeen = new HashSet<>();
     private final Set<BlockPos> blockedCells = new HashSet<>();
@@ -380,15 +380,18 @@ public final class CompositePistonResolver {
         // never pushed as separate blocks.
         if ((part.flags() & fr.xerneas02.nomoregap.part.PartFlags.PISTON_HEAD) != 0) return true;
         // Apply the vanilla push reaction of the part's block.
+        boolean retractedPiston = isRetractedPiston(part.state());
         var reaction = part.state().getPistonPushReaction();
-        if (reaction == PushReaction.BLOCK) return false;
+        // Vanilla marks piston blocks as BLOCK. For composite parts, a
+        // retracted piston is movable; only an extended (powered) one is not.
+        if (reaction == PushReaction.BLOCK && !retractedPiston) return false;
         if (reaction == PushReaction.DESTROY) {
             // Vanilla destroys the block and continues the line.
             partSeen.add(ref);
-            partsToDestroy.add(part.id());
+            partsToDestroy.add(new CompositePistonMovePlan.PartRef(composite.getBlockPos(), part.id()));
             return true;
         }
-        if (reaction == PushReaction.IGNORE || reaction == PushReaction.PUSH_ONLY) return false;
+        if ((reaction == PushReaction.IGNORE || reaction == PushReaction.PUSH_ONLY) && !retractedPiston) return false;
         // Vanilla also rejects unbreakable blocks (destroy speed -1), such as
         // bedrock, barriers and the reinforced deepslate.
         if (part.state().getDestroySpeed(level, composite.getBlockPos()) == -1.0F) return false;
@@ -441,13 +444,14 @@ public final class CompositePistonResolver {
     private boolean pushVanilla(BlockPos pos, BlockState state) {
         if (vanillaSeen.contains(pos)) return true;
         var reaction = state.getPistonPushReaction();
-        if (reaction == PushReaction.BLOCK) return false;
+        boolean retractedPiston = isRetractedPiston(state);
+        if (reaction == PushReaction.BLOCK && !retractedPiston) return false;
         if (reaction == PushReaction.DESTROY) {
             blocksToDestroy.add(pos);
             vanillaSeen.add(pos);
             return true;
         }
-        if (reaction == PushReaction.IGNORE || reaction == PushReaction.PUSH_ONLY) return false;
+        if ((reaction == PushReaction.IGNORE || reaction == PushReaction.PUSH_ONLY) && !retractedPiston) return false;
         // Vanilla also rejects unbreakable blocks (destroy speed -1): bedrock,
         // obsidian, barriers and the reinforced deepslate must never be moved,
         // even by a retracting sticky piston.
@@ -460,9 +464,18 @@ public final class CompositePistonResolver {
     }
     private boolean pushable(BlockState state, BlockPos pos, Direction moveDir) {
         if (isCompositeAnchor(state) || isCompositeProxy(state)) return true;
+        // Vanilla marks both piston blocks as immovable. A retracted vanilla
+        // piston is movable when pushed by a composite piston; an extended one
+        // remains blocked.
+        if (isRetractedPiston(state)) return true;
         // allowDestroy=true: vanilla destroys blocks with PushReaction.DESTROY
         // (tall grass, torches, ...) instead of blocking the piston.
         return PistonBaseBlock.isPushable(state, level, pos, pushDirection, true, null);
+    }
+
+    private static boolean isRetractedPiston(BlockState state) {
+        return (state.is(Blocks.PISTON) || state.is(Blocks.STICKY_PISTON))
+                && !state.getValue(PistonBaseBlock.EXTENDED);
     }
 
     private boolean isCompositeAnchor(BlockState state) {

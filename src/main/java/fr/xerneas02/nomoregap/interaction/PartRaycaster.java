@@ -5,6 +5,7 @@ import fr.xerneas02.nomoregap.geometry.ShapeTransformer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.Optional;
@@ -25,8 +26,16 @@ public final class PartRaycaster {
     public static Optional<VoxelShape> targetedShape(CompositeBlockEntity composite, BlockGetter world, Player player,
                                                       net.minecraft.core.BlockPos cell) {
         return raycast(composite, world, player, 6, cell).flatMap(hit -> composite.parts().find(hit.partId()))
-                .map(part -> ShapeTransformer.transform(
-                        part.state().getShape(world, composite.getBlockPos(), CollisionContext.of(player)), part.transform()));
+                .map(part -> {
+                    var shape = ShapeTransformer.transform(
+                            part.state().getShape(world, composite.getBlockPos(), CollisionContext.of(player)), part.transform());
+                    for (var candidate : composite.parts().view()) {
+                        if (!composite.isPistonHeadOwnedBy(candidate.id(), part.id())) continue;
+                        shape = Shapes.or(shape, ShapeTransformer.transform(candidate.state().getShape(
+                                world, composite.getBlockPos(), CollisionContext.of(player)), candidate.transform()));
+                    }
+                    return shape;
+                });
     }
 
     private static Optional<PartHitResult> raycast(CompositeBlockEntity composite, BlockGetter world, Player player,
@@ -38,8 +47,6 @@ public final class PartRaycaster {
         for (var part : composite.parts().view()) {
             if (part.state().getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE
                     || part.state().getBlock() == fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE_PROXY) continue;
-            // Piston head parts are internal; they cannot be targeted or broken.
-            if ((part.flags() & fr.xerneas02.nomoregap.part.PartFlags.PISTON_HEAD) != 0) continue;
             var shape = ShapeTransformer.transform(
                     part.state().getShape(world, composite.getBlockPos(), CollisionContext.of(player)), part.transform());
             for (var box : shape.toAabbs()) {
@@ -53,7 +60,9 @@ public final class PartRaycaster {
                         || part.state().getBlock() instanceof net.minecraft.world.level.block.MossyCarpetBlock;
                 if (closest == null || distance < closest.distanceSquared() - 1.0e-8
                         || Math.abs(distance - closest.distanceSquared()) <= 1.0e-8 && cover && !closestIsCover) {
-                    closest = new PartHitResult(part.id(), hit.get(), distance);
+                    int targetId = composite.hasPistonHeadOwner(part.id())
+                            ? composite.pistonHeadOwner(part.id()) : part.id();
+                    closest = new PartHitResult(targetId, hit.get(), distance);
                     closestIsCover = cover;
                 }
             }

@@ -37,7 +37,7 @@ abstract class CompositeProxyDestroyMixin {
         var copiedTool = tool.copy();
         var partState = target.get().state();
         if (!player.preventsBlockDrops()) tool.mineBlock(level, partState, pos, player);
-        CompositeBlock.destroyPart(level, player, proxy.anchor(), composite, target.get().id(), copiedTool, pos);
+        CompositeBlock.destroyPart(level, player, proxy.anchor(), composite, target.get().id(), copiedTool, null);
         player.connection.send(new ClientboundBlockUpdatePacket(level, pos));
         if (level.getBlockEntity(pos) instanceof CompositeProxyBlockEntity remainingProxy) {
             player.connection.send(ClientboundBlockEntityDataPacket.create(remainingProxy));

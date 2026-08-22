@@ -174,11 +174,6 @@ public class CompositeBlockEntity extends BlockEntity {
         changed();
     }
 
-    /** Returns the ids of all parts currently stored, for removal bookkeeping. */
-    public java.util.Set<Integer> partsRemoved() {
-        return new HashSet<>(parts.view().stream().map(PartInstance::id).toList());
-    }
-
     public void beginUpdate() { updateDepth++; }
 
     public void endUpdate() {

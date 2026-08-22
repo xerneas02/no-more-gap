@@ -1,15 +1,10 @@
 package fr.xerneas02.nomoregap.piston;
 
 import fr.xerneas02.nomoregap.geometry.LocalTransform;
-import fr.xerneas02.nomoregap.part.PartInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Immutable result of {@link CompositePistonResolver}. Records every part to
@@ -34,7 +29,6 @@ public final class CompositePistonMovePlan {
     public final List<BlockPos> vanillaBlocksToPush;
     public final List<BlockPos> blocksToDestroy;
     public final List<PartRef> partsToDestroy;
-    public final Map<BlockPos, Integer> toPushIndex;
     public final BlockPos pistonDestination;
 
     CompositePistonMovePlan(BlockPos pistonAnchor, int pistonPartId, Direction direction, boolean extending,
@@ -67,23 +61,6 @@ public final class CompositePistonMovePlan {
         this.blocksToDestroy = List.copyOf(blocksToDestroy);
         this.partsToDestroy = List.copyOf(partsToDestroy);
         this.pistonDestination = pistonDestination;
-        var index = new HashMap<BlockPos, Integer>();
-        for (int i = 0; i < this.vanillaBlocksToPush.size(); i++) {
-            index.put(this.vanillaBlocksToPush.get(i), i);
-        }
-        this.toPushIndex = Collections.unmodifiableMap(index);
-    }
-
-    public boolean hasMoves() {
-        return !partMoves.isEmpty() || !vanillaBlocksToPush.isEmpty();
-    }
-
-    public boolean isPartMoved(int partId) {
-        return partMoves.stream().anyMatch(move -> move.partId() == partId);
-    }
-
-    public boolean isAtDestination(BlockPos pos) {
-        return vanillaBlocksToPush.contains(pos);
     }
 
     /** An empty, blocked plan: the piston must not extend. */

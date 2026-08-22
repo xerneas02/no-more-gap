@@ -42,6 +42,44 @@ sourceSets.gametest.resources.srcDir '../../src/gametest/resources'
 // stable across the supported versions (the local copies were removed).
 sourceSets.test.java.srcDir '../../src/test/java'
 
+def sharedMain = objects.sourceDirectorySet('sharedMain', 'Shared 1.21-compatible main sources')
+sharedMain.srcDir '../../src/main/java'
+sharedMain.include([
+        'fr/xerneas02/nomoregap/advancement/ModAdvancements.java',
+        'fr/xerneas02/nomoregap/config/NoMoreGapConfig.java',
+        'fr/xerneas02/nomoregap/geometry/**',
+        'fr/xerneas02/nomoregap/interaction/CompositePartUpdater.java',
+        'fr/xerneas02/nomoregap/interaction/CompositeUseContext.java',
+        'fr/xerneas02/nomoregap/interaction/PartHitResult.java',
+        'fr/xerneas02/nomoregap/lava/LavaLogging.java',
+        'fr/xerneas02/nomoregap/mixin/BlockTickInvoker.java',
+        'fr/xerneas02/nomoregap/mixin/CompositeInteractionSetBlockMixin.java',
+        'fr/xerneas02/nomoregap/mixin/CompositeNeighborStateMixin.java',
+        'fr/xerneas02/nomoregap/mixin/CompositeScheduledTickMixin.java',
+        'fr/xerneas02/nomoregap/mixin/CompositeStairNeighborMixin.java',
+        'fr/xerneas02/nomoregap/mixin/CompositeSupportMixin.java',
+        'fr/xerneas02/nomoregap/mixin/DoorBlockMixin.java',
+        'fr/xerneas02/nomoregap/mixin/DoublePlantBlockMixin.java',
+        'fr/xerneas02/nomoregap/mixin/LavaLoggedDefaultStateMixin.java',
+        'fr/xerneas02/nomoregap/mixin/LavaLoggedFluidStateMixin.java',
+        'fr/xerneas02/nomoregap/mixin/LavaLoggedNeighborTickMixin.java',
+        'fr/xerneas02/nomoregap/mixin/LavaLoggingReactionMixin.java',
+        'fr/xerneas02/nomoregap/mixin/PlantSupportMixin.java',
+        'fr/xerneas02/nomoregap/mixin/WaterloggedStateDefinitionMixin.java',
+        'fr/xerneas02/nomoregap/network/payload/**',
+        'fr/xerneas02/nomoregap/part/PartContainer.java',
+        'fr/xerneas02/nomoregap/part/PartInstance.java',
+        'fr/xerneas02/nomoregap/registry/**',
+        'fr/xerneas02/nomoregap/renderdata/**',
+        'fr/xerneas02/nomoregap/util/**'
+])
+sourceSets.main.java.source sharedMain
+
+def sharedClient = objects.sourceDirectorySet('sharedClient', 'Shared 1.21-compatible client sources')
+sharedClient.srcDir '../../src/client/java'
+sharedClient.include 'fr/xerneas02/nomoregap/mixin/client/**'
+sourceSets.client.java.source sharedClient
+
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings loom.officialMojangMappings()

@@ -233,14 +233,6 @@ public final class CompositeBlock extends BaseEntityBlock {
         restoreAfterRemoval(level, pos, composite, removed, minedProxy);
     }
 
-    public static void restoreAfterRemoval(Level level, BlockPos pos, CompositeBlockEntity composite, int removedId) {
-        restoreAfterRemoval(level, pos, composite, java.util.Set.of(removedId));
-    }
-
-    public static void restoreAfterRemoval(Level level, BlockPos pos, CompositeBlockEntity composite, java.util.Set<Integer> removedIds) {
-        restoreAfterRemoval(level, pos, composite, removedIds, null);
-    }
-
     private static void restoreAfterRemoval(Level level, BlockPos pos, CompositeBlockEntity composite,
                                             java.util.Set<Integer> removedIds, BlockPos minedProxy) {
         composite.clearProxiesExcept(minedProxy);

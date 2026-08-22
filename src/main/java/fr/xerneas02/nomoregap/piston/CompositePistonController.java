@@ -2,7 +2,6 @@ package fr.xerneas02.nomoregap.piston;
 
 import fr.xerneas02.nomoregap.block.CompositeBlock;
 import fr.xerneas02.nomoregap.block.entity.CompositeBlockEntity;
-import fr.xerneas02.nomoregap.geometry.LocalTransform;
 import fr.xerneas02.nomoregap.interaction.CompositePartUpdater;
 import fr.xerneas02.nomoregap.part.PartInstance;
 import net.minecraft.core.BlockPos;
@@ -13,7 +12,6 @@ import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Applies a {@link CompositePistonMovePlan} to the world. The operation is
@@ -108,132 +106,14 @@ public final class CompositePistonController {
             if (count > fr.xerneas02.nomoregap.util.NoMoreGapLimits.MAX_PARTS_PER_CELL) return false;
         }
 
-        // ---- 4. Reserve destination cells -----------------------------------
-        var reservationOwners = new HashMap<BlockPos, Object>();
-        var provisionalBlocks = new HashMap<BlockPos, Block>();
-        for (var move : plan.partMoves) {
-            if (move.toAnchor().equals(move.fromAnchor())) continue;
-            var dest = move.toAnchor();
-            var occupant = reservationOwners.get(dest);
-            if (occupant != null && !occupant.equals(move.fromAnchor())) return false;
-            reservationOwners.put(dest, move.fromAnchor());
-        }
-        for (var target : plan.vanillaBlocksToPush) {
-            var occupant = reservationOwners.get(target);
-            if (occupant != null) return false;
-            reservationOwners.put(target, target);
-            var state = level.getBlockState(target);
-            if (!(state.getBlock() instanceof CompositeBlock)
-                    && !(state.getBlock() instanceof fr.xerneas02.nomoregap.block.CompositeProxyBlock)) {
-                provisionalBlocks.put(target, state.getBlock());
-            }
-        }
-        for (var destroy : plan.blocksToDestroy) {
-            reservationOwners.remove(destroy);
-        }
-
         // Destroy first: neighbour updates from moved blocks must not remove a
         // fragile block before destroyBlock gets a chance to create its drops.
         for (var destroy : plan.blocksToDestroy) {
             level.destroyBlock(destroy, true);
         }
 
-        // ---- 5. Apply part moves -------------------------------------------
-        // Apply composite moves furthest-first so a composite arrives in a cell
-        // that was just vacated by the next composite in the line. Moves that
-        // stay inside their own composite are independent and can run in any
-        // order.
-        var orderedMoves = new ArrayList<>(plan.partMoves);
-        var movedParts = new HashMap<CompositePistonMovePlan.PartRef, CompositePistonMovePlan.PartRef>();
-        var movedHeadOwners = new HashMap<CompositePistonMovePlan.PartRef, Integer>();
-        orderedMoves.sort((a, b) -> {
-            boolean aWhole = !a.toAnchor().equals(a.fromAnchor());
-            boolean bWhole = !b.toAnchor().equals(b.fromAnchor());
-            if (aWhole != bWhole) return aWhole ? -1 : 1;
-            int da = directionStep(plan.direction, a.fromAnchor());
-            int db = directionStep(plan.direction, b.fromAnchor());
-            return Integer.compare(db, da);
-        });
-        for (var move : orderedMoves) {
-            var fromAnchor = move.fromAnchor();
-            var toAnchor = move.toAnchor();
-            var sourceRef = new CompositePistonMovePlan.PartRef(fromAnchor, move.partId());
-            if (!(level.getBlockEntity(fromAnchor) instanceof CompositeBlockEntity fromComposite)) {
-                throw new IllegalStateException("Piston plan source disappeared after validation");
-            }
-            if (toAnchor.equals(fromAnchor)) {
-                // The part stays in the same composite: just update transform.
-                fromComposite.replaceTransform(move.partId(), move.toTransform());
-                movedParts.put(sourceRef, sourceRef);
-                continue;
-            }
-            var part = fromComposite.parts().find(move.partId()).orElse(null);
-            if (part == null) throw new IllegalStateException("Piston part disappeared after validation");
-            int pistonHeadOwner = fromComposite.pistonHeadOwner(move.partId());
-            // Remove from source.
-            fromComposite.removePart(move.partId());
-            if (fromComposite.parts().isEmpty()) {
-                level.removeBlock(fromAnchor, false);
-            }
-            // Add to destination.
-            CompositeBlockEntity toComposite;
-            if (level.getBlockEntity(toAnchor) instanceof CompositeBlockEntity existing) {
-                toComposite = existing;
-            } else if (level.getBlockState(toAnchor).isAir()) {
-                level.setBlock(toAnchor, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE.defaultBlockState(),
-                        Block.UPDATE_ALL);
-                if (!(level.getBlockEntity(toAnchor) instanceof CompositeBlockEntity created)) {
-                    throw new IllegalStateException("Could not create piston move destination");
-                }
-                toComposite = created;
-            } else {
-                throw new IllegalStateException("Piston destination changed after validation");
-            }
-            var movedPart = toComposite.addPart(part.state(), move.toTransform(), part.flags());
-            movedParts.put(sourceRef, new CompositePistonMovePlan.PartRef(toAnchor, movedPart.id()));
-            if (pistonHeadOwner >= 0) movedHeadOwners.put(sourceRef, pistonHeadOwner);
-        }
-        for (var entry : movedHeadOwners.entrySet()) {
-            var movedHead = movedParts.get(entry.getKey());
-            var movedPiston = movedParts.get(new CompositePistonMovePlan.PartRef(entry.getKey().anchor(), entry.getValue()));
-            if (movedHead != null && movedPiston != null && movedHead.anchor().equals(movedPiston.anchor())
-                    && level.getBlockEntity(movedHead.anchor()) instanceof CompositeBlockEntity composite) {
-                composite.setPistonHeadOwner(movedHead.partId(), movedPiston.partId());
-            }
-        }
-
-        // ---- 6. Apply vanilla block moves (furthest first) -----------------
-        // The plan stores the SOURCE positions of blocks to move (like vanilla
-        // PistonStructureResolver.getToPush()). Each block moves one cell in the
-        // movement direction: forward when extending, backward when a sticky
-        // piston retracts.
-        var moveDir = plan.extending ? plan.direction : plan.direction.getOpposite();
-        var vanillaSources = new ArrayList<>(plan.vanillaBlocksToPush);
-        // Read every source state BEFORE writing anything, so a block that is
-        // about to be overwritten is still intact when we snapshot it.
-        var sourceStates = new HashMap<BlockPos, net.minecraft.world.level.block.state.BlockState>();
-        for (var pos : vanillaSources) {
-            var state = level.getBlockState(pos);
-            if (!(state.getBlock() instanceof CompositeBlock)
-                    && !(state.getBlock() instanceof fr.xerneas02.nomoregap.block.CompositeProxyBlock)) {
-                sourceStates.put(pos, state);
-            }
-        }
-        // Move the furthest block first so it lands in air; the nearer blocks
-        // then move into the now-vacated cells.
-        vanillaSources.sort((a, b) -> {
-            int da = directionStep(moveDir, a);
-            int db = directionStep(moveDir, b);
-            return Integer.compare(db, da);
-        });
-        for (var source : vanillaSources) {
-            var state = sourceStates.get(source);
-            if (state == null) continue;
-            var target = source.offset(moveDir.getStepX(), moveDir.getStepY(), moveDir.getStepZ());
-            // The target must currently be empty (or an already-moved block cell).
-            level.setBlock(target, state, Block.UPDATE_ALL);
-            level.removeBlock(source, false);
-        }
+        moveCompositeParts(level, plan);
+        moveVanillaBlocks(server, plan);
 
         // ---- 7b. Destroy parts (PushReaction.DESTROY) -----------------------
         for (var part : plan.partsToDestroy) {
@@ -242,26 +122,128 @@ public final class CompositePistonController {
             }
         }
 
-        // ---- 8. Notify neighbours -------------------------------------------
-        for (var anchor : currentParts.keySet()) {
-            if (level.getBlockEntity(anchor) instanceof CompositeBlockEntity composite
-                    && !composite.parts().isEmpty()) {
-                composite.refreshProxies();
-            }
-        }
-        for (var dest : destParts.keySet()) {
-            if (level.getBlockEntity(dest) instanceof CompositeBlockEntity composite) {
-                composite.refreshProxies();
-            }
-        }
-        for (var anchor : currentParts.keySet()) {
-            CompositePartUpdater.refreshAround(level, anchor);
-        }
-        for (var dest : destParts.keySet()) {
-            CompositePartUpdater.refreshAround(level, dest);
-        }
-        level.updateNeighborsAt(plan.pistonAnchor, level.getBlockState(plan.pistonAnchor).getBlock());
+        notifyMovedComposites(level, plan, currentParts.keySet(), destParts.keySet());
         return true;
+    }
+
+    private static void moveCompositeParts(Level level, CompositePistonMovePlan plan) {
+        var moveDirection = plan.extending ? plan.direction : plan.direction.getOpposite();
+        var orderedMoves = new ArrayList<>(plan.partMoves);
+        var movedParts = new HashMap<CompositePistonMovePlan.PartRef, CompositePistonMovePlan.PartRef>();
+        var movedHeadOwners = new HashMap<CompositePistonMovePlan.PartRef, Integer>();
+        orderedMoves.sort((a, b) -> {
+            boolean aWhole = !a.toAnchor().equals(a.fromAnchor());
+            boolean bWhole = !b.toAnchor().equals(b.fromAnchor());
+            if (aWhole != bWhole) return aWhole ? -1 : 1;
+            return Integer.compare(directionStep(plan.direction, b.fromAnchor()),
+                    directionStep(plan.direction, a.fromAnchor()));
+        });
+        for (var move : orderedMoves) {
+            var sourceRef = new CompositePistonMovePlan.PartRef(move.fromAnchor(), move.partId());
+            if (!(level.getBlockEntity(move.fromAnchor()) instanceof CompositeBlockEntity source)) {
+                throw new IllegalStateException("Piston plan source disappeared after validation");
+            }
+            if (move.toAnchor().equals(move.fromAnchor())) {
+                source.beginUpdate();
+                try {
+                    source.replaceTransform(move.partId(), move.toTransform());
+                    source.startPistonMovement(move.partId(), moveDirection);
+                } finally {
+                    source.endUpdate();
+                }
+                movedParts.put(sourceRef, sourceRef);
+                continue;
+            }
+            var part = source.parts().find(move.partId()).orElseThrow(
+                    () -> new IllegalStateException("Piston part disappeared after validation"));
+            int pistonHeadOwner = source.pistonHeadOwner(move.partId());
+            source.removePart(move.partId());
+            if (source.parts().isEmpty()) level.removeBlock(move.fromAnchor(), false);
+
+            var destination = destinationComposite(level, move.toAnchor());
+            destination.beginUpdate();
+            PartInstance movedPart;
+            try {
+                movedPart = destination.addPart(part.state(), move.toTransform(), part.flags());
+                destination.startPistonMovement(movedPart.id(), moveDirection);
+            } finally {
+                destination.endUpdate();
+            }
+            movedParts.put(sourceRef, new CompositePistonMovePlan.PartRef(move.toAnchor(), movedPart.id()));
+            if (pistonHeadOwner >= 0) movedHeadOwners.put(sourceRef, pistonHeadOwner);
+        }
+        movedHeadOwners.forEach((oldHead, oldPistonId) -> {
+            var movedHead = movedParts.get(oldHead);
+            var movedPiston = movedParts.get(new CompositePistonMovePlan.PartRef(oldHead.anchor(), oldPistonId));
+            if (movedHead != null && movedPiston != null && movedHead.anchor().equals(movedPiston.anchor())
+                    && level.getBlockEntity(movedHead.anchor()) instanceof CompositeBlockEntity composite) {
+                composite.setPistonHeadOwner(movedHead.partId(), movedPiston.partId());
+            }
+        });
+    }
+
+    private static CompositeBlockEntity destinationComposite(Level level, BlockPos pos) {
+        if (level.getBlockEntity(pos) instanceof CompositeBlockEntity composite) return composite;
+        if (!level.getBlockState(pos).isAir()) {
+            throw new IllegalStateException("Piston destination changed after validation");
+        }
+        level.setBlock(pos, fr.xerneas02.nomoregap.registry.ModBlocks.COMPOSITE.defaultBlockState(), Block.UPDATE_ALL);
+        if (level.getBlockEntity(pos) instanceof CompositeBlockEntity composite) return composite;
+        throw new IllegalStateException("Could not create piston move destination");
+    }
+
+    private static void moveVanillaBlocks(net.minecraft.server.level.ServerLevel level,
+                                          CompositePistonMovePlan plan) {
+        var moveDirection = plan.extending ? plan.direction : plan.direction.getOpposite();
+        var sources = new ArrayList<>(plan.vanillaBlocksToPush);
+        var sourceStates = new HashMap<BlockPos, net.minecraft.world.level.block.state.BlockState>();
+        for (var pos : sources) {
+            var state = level.getBlockState(pos);
+            if (!(state.getBlock() instanceof CompositeBlock)
+                    && !(state.getBlock() instanceof fr.xerneas02.nomoregap.block.CompositeProxyBlock)) {
+                sourceStates.put(pos, state);
+            }
+        }
+        sources.sort((a, b) -> Integer.compare(directionStep(moveDirection, b), directionStep(moveDirection, a)));
+        for (var source : sources) {
+            var movedState = sourceStates.get(source);
+            if (movedState == null) continue;
+            var target = source.relative(moveDirection);
+            var movingState = Blocks.MOVING_PISTON.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.piston.MovingPistonBlock.FACING, plan.direction)
+                    .setValue(net.minecraft.world.level.block.piston.MovingPistonBlock.TYPE,
+                            net.minecraft.world.level.block.state.properties.PistonType.DEFAULT);
+            level.setBlock(target, movingState, Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_CLIENTS);
+            var movingEntity = net.minecraft.world.level.block.piston.MovingPistonBlock.newMovingBlockEntity(
+                    target, movingState, movedState, plan.direction, plan.extending, false);
+            level.setBlockEntity(movingEntity);
+            movingEntity.setChanged();
+            level.sendBlockUpdated(target, movingState, movingState, Block.UPDATE_CLIENTS);
+            var players = net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(level, target);
+            fr.xerneas02.nomoregap.NoMoreGap.LOGGER.debug(
+                    "Created moving piston at {} for {} tracking clients", target, players.size());
+            for (var player : players) {
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                        new fr.xerneas02.nomoregap.network.payload.MovingPistonPayload(
+                                target, movedState, plan.direction, plan.extending));
+            }
+            level.removeBlock(source, false);
+        }
+    }
+
+    private static void notifyMovedComposites(Level level, CompositePistonMovePlan plan,
+                                               java.util.Set<BlockPos> sources, java.util.Set<BlockPos> destinations) {
+        for (var pos : sources) {
+            if (level.getBlockEntity(pos) instanceof CompositeBlockEntity composite && !composite.parts().isEmpty()) {
+                composite.refreshProxies();
+            }
+        }
+        for (var pos : destinations) {
+            if (level.getBlockEntity(pos) instanceof CompositeBlockEntity composite) composite.refreshProxies();
+        }
+        sources.forEach(pos -> CompositePartUpdater.refreshAround(level, pos));
+        destinations.forEach(pos -> CompositePartUpdater.refreshAround(level, pos));
+        level.updateNeighborsAt(plan.pistonAnchor, level.getBlockState(plan.pistonAnchor).getBlock());
     }
 
     private static int directionStep(Direction direction, BlockPos pos) {

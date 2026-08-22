@@ -59,6 +59,8 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
                     && CompositeChunkModel.hasChunkGeometry(state.ownerPositions[i]);
             state.lights[i] = state.lightCoords;
             state.yScale[i] = verticalScale(entity, state.parts[i]);
+            state.extensionProgress[i] = entity.pistonMovementProgress(state.partIds[i], tickProgress);
+            state.movementDirections[i] = entity.pistonMovementDirection(state.partIds[i]);
         }
     }
 
@@ -111,7 +113,11 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
             if (state.partBounds[i] != null && camera.cullFrustum != null
                     && !camera.cullFrustum.isVisible(state.partBounds[i])) continue;
             pose.pushPose();
-            pose.translate(state.x[i], state.y[i], state.z[i]);
+            var facing = state.movementDirections[i];
+            float extension = state.extensionProgress[i] - 1;
+            pose.translate(state.x[i] + (facing == null ? 0 : facing.getStepX() * extension),
+                    state.y[i] + (facing == null ? 0 : facing.getStepY() * extension),
+                    state.z[i] + (facing == null ? 0 : facing.getStepZ() * extension));
             pose.scale(1, state.yScale[i], 1);
             if (state.formedRock[i]) {
                 pose.translate(0.5, 0.5, 0.5);
@@ -198,6 +204,8 @@ public class CompositeBlockEntityRenderer implements BlockEntityRenderer<Composi
         private final double[] y = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final double[] z = new double[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final float[] yScale = new float[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final float[] extensionProgress = new float[NoMoreGapLimits.MAX_PARTS_PER_CELL];
+        private final net.minecraft.core.Direction[] movementDirections = new net.minecraft.core.Direction[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] rotation = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final int[] lights = new int[NoMoreGapLimits.MAX_PARTS_PER_CELL];
         private final boolean[] formedRock = new boolean[NoMoreGapLimits.MAX_PARTS_PER_CELL];

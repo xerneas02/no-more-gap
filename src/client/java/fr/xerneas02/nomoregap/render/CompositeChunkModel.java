@@ -3,6 +3,7 @@ package fr.xerneas02.nomoregap.render;
 import fr.xerneas02.nomoregap.lava.LavaLoggingReactions;
 import fr.xerneas02.nomoregap.config.NoMoreGapConfig;
 import fr.xerneas02.nomoregap.part.PartInstance;
+import fr.xerneas02.nomoregap.part.PartFlags;
 import fr.xerneas02.nomoregap.renderdata.CompositeRenderData;
 import fr.xerneas02.nomoregap.util.NoMoreGapLimits;
 import net.fabricmc.fabric.api.blockgetter.v2.FabricBlockGetter;
@@ -30,7 +31,8 @@ public final class CompositeChunkModel implements BlockStateModel {
     public CompositeChunkModel(BlockStateModel fallback) { this.fallback = fallback; }
 
     public static boolean isChunkRendered(PartInstance part) {
-        return part.flags() != LavaLoggingReactions.FORMED_ROCK;
+        return part.flags() != LavaLoggingReactions.FORMED_ROCK
+                && (part.flags() & (PartFlags.PISTON_HEAD | PartFlags.PISTON_MOVING)) == 0;
     }
 
     public static boolean hasChunkGeometry(BlockPos pos) { return true; }

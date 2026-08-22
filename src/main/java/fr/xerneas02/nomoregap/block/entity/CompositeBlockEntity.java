@@ -43,6 +43,10 @@ public class CompositeBlockEntity extends BlockEntity {
     private final java.util.Map<Integer, Boolean> pistonPower = new HashMap<>();
     /** Server-side link between a piston-head part and the piston part that created it. */
     private final java.util.Map<Integer, Integer> pistonHeadOwners = new HashMap<>();
+    /** Game tick when each piston head started extending; old values simply resolve to a finished animation. */
+    private final java.util.Map<Integer, Long> pistonMovementStarts = new HashMap<>();
+    private final java.util.Map<Integer, net.minecraft.core.Direction> pistonMovementDirections = new HashMap<>();
+    private final java.util.Map<Integer, Long> retractingPistonHeads = new HashMap<>();
 
     public CompositeBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.COMPOSITE, pos, state); }
 
@@ -85,6 +89,77 @@ public class CompositeBlockEntity extends BlockEntity {
     public void setPistonHeadOwner(int headId, int pistonId) {
         pistonHeadOwners.put(headId, pistonId);
         setChanged();
+    }
+
+    public void startPistonMovement(int partId, net.minecraft.core.Direction direction) {
+        if (level == null) return;
+        var current = parts.find(partId).orElse(null);
+        if (current == null) return;
+        var replacement = new java.util.ArrayList<PartInstance>(parts.view());
+        replacement.replaceAll(part -> part.id() == partId
+                ? new PartInstance(part.id(), part.state(), part.transform(),
+                part.flags() | fr.xerneas02.nomoregap.part.PartFlags.PISTON_MOVING)
+                : part);
+        parts.replaceAll(replacement);
+        pistonMovementStarts.put(partId, level.getGameTime());
+        pistonMovementDirections.put(partId, direction);
+        level.scheduleTick(worldPosition, getBlockState().getBlock(), 2);
+        changed();
+    }
+
+    public void startPistonHeadRetraction(int headId, net.minecraft.core.Direction direction) {
+        startPistonMovement(headId, direction.getOpposite());
+        retractingPistonHeads.put(headId, level.getGameTime() + 2);
+        level.scheduleTick(worldPosition, getBlockState().getBlock(), 2);
+    }
+
+    public void cancelPistonMovement(int partId) {
+        var replacement = new java.util.ArrayList<PartInstance>(parts.view());
+        replacement.replaceAll(part -> part.id() == partId
+                ? new PartInstance(part.id(), part.state(), part.transform(),
+                part.flags() & ~fr.xerneas02.nomoregap.part.PartFlags.PISTON_MOVING)
+                : part);
+        parts.replaceAll(replacement);
+        pistonMovementStarts.remove(partId);
+        pistonMovementDirections.remove(partId);
+        retractingPistonHeads.remove(partId);
+        changed();
+    }
+
+    public Set<Integer> takeRetractedPistonHeads(long gameTime) {
+        var due = new HashSet<Integer>();
+        retractingPistonHeads.forEach((id, time) -> { if (time <= gameTime) due.add(id); });
+        due.forEach(retractingPistonHeads::remove);
+        return due;
+    }
+
+    public void finishPistonMovements(long gameTime) {
+        var finished = new HashSet<Integer>();
+        pistonMovementStarts.forEach((id, time) -> { if (time + 2 <= gameTime) finished.add(id); });
+        if (finished.isEmpty()) return;
+        var replacement = new java.util.ArrayList<PartInstance>(parts.view());
+        replacement.replaceAll(part -> finished.contains(part.id())
+                ? new PartInstance(part.id(), part.state(), part.transform(),
+                part.flags() & ~fr.xerneas02.nomoregap.part.PartFlags.PISTON_MOVING)
+                : part);
+        parts.replaceAll(replacement);
+        finished.forEach(pistonMovementStarts::remove);
+        finished.forEach(pistonMovementDirections::remove);
+        changed();
+    }
+
+    public float pistonMovementProgress(int partId, float tickProgress) {
+        if (level == null) return 1;
+        var started = pistonMovementStarts.get(partId);
+        return started == null ? 1 : pistonExtensionProgress(level.getGameTime(), started, tickProgress);
+    }
+
+    public net.minecraft.core.Direction pistonMovementDirection(int partId) {
+        return pistonMovementDirections.get(partId);
+    }
+
+    static float pistonExtensionProgress(long gameTime, long started, float tickProgress) {
+        return Math.clamp((gameTime - started + tickProgress) / 2, 0, 1);
     }
 
     public boolean isPistonHeadOwnedBy(int headId, int pistonId) {
@@ -138,6 +213,9 @@ public class CompositeBlockEntity extends BlockEntity {
         comparatorOutputs.remove(id);
         pistonPower.remove(id);
         pistonHeadOwners.remove(id);
+        pistonMovementStarts.remove(id);
+        pistonMovementDirections.remove(id);
+        retractingPistonHeads.remove(id);
         changed();
         return true;
     }
@@ -164,6 +242,9 @@ public class CompositeBlockEntity extends BlockEntity {
         if (parts.isEmpty()) return;
         parts.clear();
         pistonHeadOwners.clear();
+        pistonMovementStarts.clear();
+        pistonMovementDirections.clear();
+        retractingPistonHeads.clear();
         changed();
     }
 
@@ -171,6 +252,9 @@ public class CompositeBlockEntity extends BlockEntity {
     public void replaceParts(java.util.List<PartInstance> replacement) {
         parts.replaceAll(replacement);
         pistonHeadOwners.keySet().removeIf(id -> replacement.stream().noneMatch(part -> part.id() == id));
+        pistonMovementStarts.keySet().removeIf(id -> replacement.stream().noneMatch(part -> part.id() == id));
+        pistonMovementDirections.keySet().retainAll(pistonMovementStarts.keySet());
+        retractingPistonHeads.keySet().retainAll(pistonMovementStarts.keySet());
         changed();
     }
 
@@ -333,6 +417,9 @@ public class CompositeBlockEntity extends BlockEntity {
         output.putLong("revision", revision);
         comparatorOutputs.forEach((id, value) -> output.putInt("comparator." + id, value));
         pistonHeadOwners.forEach((headId, pistonId) -> output.putInt("pistonHeadOwner." + headId, pistonId));
+        pistonMovementStarts.forEach((id, started) -> output.putLong("pistonMovementStart." + id, started));
+        pistonMovementDirections.forEach((id, direction) -> output.putInt("pistonMovementDirection." + id, direction.ordinal()));
+        retractingPistonHeads.forEach((id, time) -> output.putLong("pistonHeadRemoval." + id, time));
         var list = output.list("parts", PartInstance.CODEC);
         parts.view().forEach(list::add);
     }
@@ -342,6 +429,9 @@ public class CompositeBlockEntity extends BlockEntity {
         parts.clear();
         comparatorOutputs.clear();
         pistonHeadOwners.clear();
+        pistonMovementStarts.clear();
+        pistonMovementDirections.clear();
+        retractingPistonHeads.clear();
         revision = Math.max(0, input.getLongOr("revision", 0));
         for (var part : input.listOrEmpty("parts", PartInstance.CODEC)) {
             if (isInternalPart(part.state())) {
@@ -358,6 +448,15 @@ public class CompositeBlockEntity extends BlockEntity {
             if (output != 0) comparatorOutputs.put(part.id(), output);
             int pistonOwner = input.getIntOr("pistonHeadOwner." + part.id(), -1);
             if (pistonOwner >= 0) pistonHeadOwners.put(part.id(), pistonOwner);
+            long movementStart = input.getLongOr("pistonMovementStart." + part.id(),
+                    input.getLongOr("pistonExtensionStart." + part.id(), -1));
+            int movementDirection = input.getIntOr("pistonMovementDirection." + part.id(), -1);
+            if (movementStart >= 0 && movementDirection >= 0 && movementDirection < net.minecraft.core.Direction.values().length) {
+                pistonMovementStarts.put(part.id(), movementStart);
+                pistonMovementDirections.put(part.id(), net.minecraft.core.Direction.values()[movementDirection]);
+            }
+            long removal = input.getLongOr("pistonHeadRemoval." + part.id(), -1);
+            if (removal >= 0) retractingPistonHeads.put(part.id(), removal);
         }
         geometryDirty = true;
         geometry.invalidate();

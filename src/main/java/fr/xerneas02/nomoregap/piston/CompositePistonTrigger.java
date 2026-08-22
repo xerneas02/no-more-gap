@@ -73,9 +73,15 @@ public final class CompositePistonTrigger {
             }
             // The piston part extends: shorten the body and add the head part
             // one block ahead, exactly like vanilla does with a moving piston.
-            current.replacePart(part.id(),
-                    current.parts().find(part.id()).orElseThrow().state().setValue(PistonBaseBlock.EXTENDED, true));
-            addPistonHead(current, part, direction, sticky);
+            current.beginUpdate();
+            try {
+                current.replacePart(part.id(),
+                        current.parts().find(part.id()).orElseThrow().state().setValue(PistonBaseBlock.EXTENDED, true));
+                addPistonHead(current, part, direction, sticky);
+            } finally {
+                current.endUpdate();
+            }
+            playPistonSound(level, anchor, part, true);
         } finally {
             firing = false;
         }
@@ -101,11 +107,11 @@ public final class CompositePistonTrigger {
             // Remove the head BEFORE applying the retraction so the head cell
             // (and its proxy) is free for a pulled block.
             if (!(level.getBlockEntity(anchor) instanceof CompositeBlockEntity current)) return;
-            var removedHead = removePistonHead(current, part, direction);
+            var removedHead = retractPistonHead(current, part, direction);
             if (!plan.blocked && !CompositePistonController.apply(level, plan)) {
                 if (removedHead != null) {
-                    var restored = current.addPart(removedHead.state(), removedHead.transform(), removedHead.flags());
-                    current.setPistonHeadOwner(restored.id(), part.id());
+                    current.replaceTransform(removedHead.id(), removedHead.transform());
+                    current.cancelPistonMovement(removedHead.id());
                 }
                 return;
             }
@@ -114,6 +120,7 @@ public final class CompositePistonTrigger {
             }
             current.replacePart(part.id(),
                     current.parts().find(part.id()).orElseThrow().state().setValue(PistonBaseBlock.EXTENDED, false));
+            playPistonSound(level, anchor, part, false);
         } finally {
             firing = false;
         }
@@ -138,16 +145,23 @@ public final class CompositePistonTrigger {
                 .setValue(BlockStateProperties.PISTON_TYPE, sticky ? PistonType.STICKY : PistonType.DEFAULT);
         var head = composite.addPart(headState, headTransform, PartFlags.PISTON_HEAD);
         composite.setPistonHeadOwner(head.id(), pistonPart.id());
+        composite.startPistonMovement(head.id(), direction);
     }
 
     /** Removes only the head created by this piston part. */
-    private static PartInstance removePistonHead(CompositeBlockEntity composite, PartInstance pistonPart, Direction direction) {
+    private static PartInstance retractPistonHead(CompositeBlockEntity composite, PartInstance pistonPart, Direction direction) {
         var headTransform = pistonHeadTransform(pistonPart, direction);
         for (var part : java.util.List.copyOf(composite.parts().view())) {
             if ((part.flags() & PartFlags.PISTON_HEAD) != 0
                     && (composite.isPistonHeadOwnedBy(part.id(), pistonPart.id())
                     || (!composite.hasPistonHeadOwner(part.id()) && part.transform().equals(headTransform)))) {
-                composite.removePart(part.id());
+                composite.beginUpdate();
+                try {
+                    composite.replaceTransform(part.id(), pistonPart.transform());
+                    composite.startPistonHeadRetraction(part.id(), direction);
+                } finally {
+                    composite.endUpdate();
+                }
                 return part;
             }
         }
@@ -207,5 +221,11 @@ public final class CompositePistonTrigger {
                 Math.floorDiv(transform.x().units(), unit),
                 Math.floorDiv(transform.y().units(), unit),
                 Math.floorDiv(transform.z().units(), unit));
+    }
+
+    private static void playPistonSound(ServerLevel level, BlockPos anchor, PartInstance part, boolean extending) {
+        level.playSound(null, partWorldPos(anchor, part.transform()),
+                extending ? net.minecraft.sounds.SoundEvents.PISTON_EXTEND : net.minecraft.sounds.SoundEvents.PISTON_CONTRACT,
+                net.minecraft.sounds.SoundSource.BLOCKS, 0.5F, level.getRandom().nextFloat() * 0.25F + 0.6F);
     }
 }

@@ -191,6 +191,8 @@ public final class CompositeBlock extends BaseEntityBlock {
     @Override protected void tick(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos, RandomSource random) {
         if (!(level.getBlockEntity(pos) instanceof CompositeBlockEntity composite)) return;
         composite.refreshProxies();
+        for (var id : composite.takeRetractedPistonHeads(level.getGameTime())) composite.removePart(id);
+        composite.finishPistonMovements(level.getGameTime());
         for (var id : composite.takeScheduledParts(level.getGameTime())) {
             var part = composite.parts().find(id).orElse(null);
             if (part != null && part.state().getBlock() instanceof net.minecraft.world.level.block.ButtonBlock) {
